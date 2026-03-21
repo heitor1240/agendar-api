@@ -545,12 +545,12 @@ function BookingPage() {
         <p style={S.sectionSub}>Siga os passos para garantir o seu atendimento</p>
         <div style={{ display: 'flex', marginBottom: 40 }}>
           {steps.map((s, i) => {
-            const num = i+1; const active = step===num; const done = step>num;
+            const num = i+1; const active = step===num; const delay = step>num;
             return (
               <React.Fragment key={i}>
                 <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, background: (done||active) ? 'var(--gold)' : 'var(--dark3)', color: (done||active) ? '#000' : 'var(--text-dim)' }}>
-                    {done ? '✓' : num}
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, background: (delay||active) ? 'var(--gold)' : 'var(--dark3)', color: (delay||active) ? '#000' : 'var(--text-dim)' }}>
+                    {delay ? '✓' : num}
                   </div>
                   <div style={{ fontSize: 11, color: active ? 'var(--gold)' : 'var(--text-dim)', fontWeight: active ? 600 : 400 }}>{s}</div>
                 </div>
