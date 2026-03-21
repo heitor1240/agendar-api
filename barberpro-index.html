@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BarberPro</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --gold: #C9A84C; --gold-light: #E8C97A; --gold-dim: #8A6E2F;
+    --black: #0A0A0A; --dark: #111111; --dark2: #1A1A1A; --dark3: #222222; --dark4: #2C2C2C;
+    --surface: #181818; --surface2: #202020;
+    --text: #F0EDE6; --text-muted: #9A9590; --text-dim: #5A5550;
+    --danger: #C0392B; --success: #1E7A4F;
+    --radius: 8px; --radius-lg: 14px;
+  }
+  html, body { height: 100%; background: var(--black); color: var(--text); font-family: 'DM Sans', sans-serif; }
+  #root { height: 100%; }
+  button { cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  input, select, textarea { font-family: 'DM Sans', sans-serif; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--dark2); }
+  ::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+// =============================================
+// CONFIG — TROQUE AQUI PARA CADA CLIENTE
+// =============================================
+const CONFIG = {
+  shopName: "BarberPro",
+  shopSlogan: "Tradição & Estilo em cada corte",
+  shopAddress: "Rua das Tesouras, 123 — Centro",
+  shopPhone: "(44) 99999-0000",
+  shopHours: "Seg–Sáb: 09h–20h",
+  supabaseUrl: "https://dgczogtyzlmuvlotnvwm.supabase.co",
+  supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnY3pvZ3R5emxtdXZsb3RudndtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMDMxMDYsImV4cCI6MjA4OTY3OTEwNn0.DOfjCbnfdgJArhmBt2CK-fvv41PBu4Jr0EmUlbsQI1w",
+  // adminEmail: email do admin — login do admin continua local por segurança
+  adminEmail: "admin@barberpro.com",
+  adminPassword: "admin123",
+};
+
+// =============================================
+// SUPABASE CLIENT — sempre ativo com as credenciais acima
+// =============================================
+const sb = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+
+// =============================================
+// ADMIN LOCAL (não vai pro Supabase Auth)
+// =============================================
+const ADMIN_USER = { id: "admin-local", email: CONFIG.adminEmail, name: "Administrador", role: "admin" };
+
+// =============================================
+// MOCK DATA — fallback se Supabase vazio
+// =============================================
+const MOCK_BARBERS = [
+  { id: 1, name: "Carlos Silva", role: "Master Barber", bio: "15 anos de experiência. Especialista em degradê e barba.", email: "carlos@barberpro.com", active: true },
+  { id: 2, name: "Rafael Costa", role: "Senior Barber", bio: "Apaixonado por estilos clássicos e modernos.", email: "rafael@barberpro.com", active: true },
+  { id: 3, name: "Bruno Mendes", role: "Barber", bio: "Especialista em cortes infantis e degradê.", email: "bruno@barberpro.com", active: true },
+];
+const MOCK_SERVICES = [
+  { id: 1, name: "Corte Clássico", duration: 30, price: 45, description: "Corte tradicional com acabamento perfeito", active: true },
+  { id: 2, name: "Corte + Barba", duration: 60, price: 75, description: "Combo completo: corte e modelagem de barba", active: true },
+  { id: 3, name: "Degradê", duration: 45, price: 55, description: "Degradê moderno com máquina e tesoura", active: true },
+  { id: 4, name: "Barba Completa", duration: 30, price: 35, description: "Toalha quente, navalha e hidratação", active: true },
+  { id: 5, name: "Hidratação", duration: 20, price: 25, description: "Tratamento capilar premium", active: true },
+  { id: 6, name: "Sobrancelha", duration: 15, price: 15, description: "Design e acabamento da sobrancelha", active: true },
+];
+
+// =============================================
+// DB LAYER — todas operações via Supabase
+// =============================================
+const DB = {
+
+  // AUTH — Login/cadastro via Supabase Auth
+  async signUp(email, password, name, phone = '') {
+    const { data, error } = await sb.auth.signUp({
+      email, password,
+      options: { 
+        data: { name, phone },
+        emailRedirectTo: window.location.href.split('?')[0]
+      }
+    });
+    if (error) return { user: null, error };
+    // perfil criado pelo trigger, mas garantimos aqui também
+    if (data.user) {
+      await sb.from('profiles').upsert({
+        id: data.user.id, name, phone, role: 'client'
+      });
+    }
+    return { user: data.user, error: null };
+  },
+
+  async signIn(email, password) {
+    // 1. Admin local
+    if (email === CONFIG.adminEmail && password === CONFIG.adminPassword) {
+      return { user: ADMIN_USER, error: null };
+    }
+    
+    // 2. Barbeiros locais (Demo) — permite entrar sem Supabase Auth para teste
+    const mockBarber = MOCK_BARBERS.find(b => b.email === email);
+    if (mockBarber && password === 'demo123') {
+      return { user: { ...mockBarber, role: 'barber', barber_id: mockBarber.id }, error: null };
+    }
+
+    // 3. Supabase Auth
+     try {
+       const { data, error } = await sb.auth.signInWithPassword({ email, password });
+       if (error) {
+         if (error.message.toLowerCase().includes('email not confirmed')) {
+           return { user: null, error: { message: 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.' } };
+         }
+         return { user: null, error: { message: error.status === 400 ? 'E-mail ou senha incorretos' : error.message } };
+       }
+      const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+      return { user: { id: data.user.id, email: data.user.email, ...(profile || { role: 'client' }) }, error: null };
+    } catch (e) {
+      return { user: null, error: { message: 'Erro de conexão com o banco de dados' } };
+    }
+  },
+
+  async signOut() {
+    await sb.auth.signOut();
+  },
+
+  async getSession() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return null;
+    const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+    // Retorna o usuário mesmo se o perfil ainda não existir, usando 'client' como padrão
+    return { id: session.user.id, email: session.user.email, role: 'client', ...profile };
+  },
+
+  // BARBERS
+  async getBarbers() {
+    const { data, error } = await sb.from('barbers').select('*').eq('active', true).order('id');
+    if (error || !data || data.length === 0) return MOCK_BARBERS;
+    return data;
+  },
+  async addBarber(b) {
+    const { data, error } = await sb.from('barbers').insert({ ...b, active: true }).select().single();
+    return { data, error };
+  },
+  async updateBarber(id, ch) {
+    const { error } = await sb.from('barbers').update(ch).eq('id', id);
+    return { error };
+  },
+  async deleteBarber(id) {
+    const { error } = await sb.from('barbers').update({ active: false }).eq('id', id);
+    return { error };
+  },
+
+  // SERVICES
+  async getServices() {
+    const { data, error } = await sb.from('services').select('*').eq('active', true).order('id');
+    if (error || !data || data.length === 0) return MOCK_SERVICES;
+    return data;
+  },
+  async addService(s) {
+    const { data, error } = await sb.from('services').insert({ ...s, active: true }).select().single();
+    return { data, error };
+  },
+  async updateService(id, ch) {
+    const { error } = await sb.from('services').update(ch).eq('id', id);
+    return { error };
+  },
+  async deleteService(id) {
+    const { error } = await sb.from('services').update({ active: false }).eq('id', id);
+    return { error };
+  },
+
+  // APPOINTMENTS
+  async getAppointments(filters = {}) {
+    let q = sb.from('appointments').select('*').order('date', { ascending: false }).order('time');
+    if (filters.barber_id) q = q.eq('barber_id', filters.barber_id);
+    if (filters.client_email) q = q.eq('client_email', filters.client_email);
+    const { data, error } = await q;
+    if (error) { console.error('getAppointments error:', error); return []; }
+    return data || [];
+  },
+  async addAppointment(apt) {
+    // remove id local antes de inserir (Supabase gera o próprio)
+    const { id: _ignore, ...aptData } = apt;
+    const { data, error } = await sb.from('appointments').insert(aptData).select().single();
+    if (error) console.error('addAppointment error:', error);
+    return { data, error };
+  },
+  async updateAppointmentStatus(id, status) {
+    const { error } = await sb.from('appointments').update({ status }).eq('id', id);
+    if (error) console.error('updateStatus error:', error);
+    return { error };
+  },
+
+  // PROFILES (para barbeiro acessar seu próprio perfil)
+  async getProfileByEmail(email) {
+    const { data } = await sb.from('profiles').select('*').eq('email', email).single();
+    return data;
+  },
+  async setBarberRole(userId, barberId) {
+    const { error } = await sb.from('profiles').update({ role: 'barber', barber_id: barberId }).eq('id', userId);
+    return { error };
+  },
+};
+
+// =============================================
+// HELPERS
+// =============================================
+const fmtPrice = (v) => `R$ ${Number(v).toFixed(2).replace('.', ',')}`;
+const fmtDate = (d) => { const dt = new Date(d + 'T12:00:00'); return dt.toLocaleDateString('pt-BR'); };
+const today = () => new Date().toISOString().split('T')[0];
+const addDays = (d, n) => { const dt = new Date(d + 'T12:00:00'); dt.setDate(dt.getDate() + n); return dt.toISOString().split('T')[0]; };
+
+function generateTimeSlots(start = 9, end = 20, interval = 30) {
+  const slots = [];
+  for (let h = start; h < end; h++)
+    for (let m = 0; m < 60; m += interval)
+      slots.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  return slots;
+}
+
+// =============================================
+// STYLES
+// =============================================
+const S = {
+  page: { minHeight: '100vh', background: 'var(--black)' },
+  header: { background: 'var(--dark)', borderBottom: '1px solid #2A2520', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 },
+  logo: { fontFamily: "'Playfair Display', serif", fontSize: 22, color: 'var(--gold)', letterSpacing: 2, fontWeight: 700 },
+  goldBtn: { background: 'var(--gold)', color: '#000', border: 'none', borderRadius: 'var(--radius)', padding: '10px 22px', fontWeight: 600, fontSize: 14, cursor: 'pointer' },
+  outlineBtn: { background: 'transparent', color: 'var(--gold)', border: '1px solid var(--gold)', borderRadius: 'var(--radius)', padding: '9px 20px', fontWeight: 500, fontSize: 14, cursor: 'pointer' },
+  ghostBtn: { background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--dark4)', borderRadius: 'var(--radius)', padding: '9px 20px', fontWeight: 400, fontSize: 14, cursor: 'pointer' },
+  card: { background: 'var(--surface)', border: '1px solid #2A2520', borderRadius: 'var(--radius-lg)', padding: 24 },
+  input: { width: '100%', background: 'var(--dark2)', border: '1px solid var(--dark4)', borderRadius: 'var(--radius)', padding: '11px 14px', color: 'var(--text)', fontSize: 14, outline: 'none' },
+  label: { display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500, letterSpacing: 0.5, textTransform: 'uppercase' },
+  badge: { display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
+  divider: { height: 1, background: '#2A2520', margin: '20px 0' },
+  sectionTitle: { fontFamily: "'Playfair Display', serif", fontSize: 28, color: 'var(--gold)', marginBottom: 8 },
+  sectionSub: { color: 'var(--text-muted)', fontSize: 15, marginBottom: 32 },
+};
+
+const AppCtx = React.createContext(null);
+function useApp() { return React.useContext(AppCtx); }
+
+// =============================================
+// UI COMPONENTS
+// =============================================
+function GoldLine() {
+  return <div style={{ height: 2, background: 'linear-gradient(90deg,transparent,var(--gold),transparent)', maxWidth: 80, margin: '0 auto 32px' }} />;
+}
+
+function Avatar({ name = '', size = 44, style: st = {} }) {
+  const initials = name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  return <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--dark3)', border: '2px solid var(--gold-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.35, color: 'var(--gold)', fontWeight: 600, flexShrink: 0, ...st }}>{initials}</div>;
+}
+
+function Modal({ title, onClose, children, width = 480 }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid #2A2520', borderRadius: 16, width: '100%', maxWidth: width, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid #2A2520', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: 'var(--gold)' }}>{title}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ padding: 24 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Toast({ msg, type = 'success', onClose }) {
+  React.useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, []);
+  const colors = { success: 'var(--success)', error: 'var(--danger)', info: 'var(--gold-dim)' };
+  return (
+    <div style={{ position: 'fixed', bottom: 24, right: 24, background: 'var(--surface)', border: `1px solid ${colors[type]}`, borderRadius: 10, padding: '12px 20px', zIndex: 9999, display: 'flex', alignItems: 'center', gap: 10, minWidth: 280, maxWidth: 400 }}>
+      <span style={{ color: colors[type], fontSize: 16, flexShrink: 0 }}>{type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+      <span style={{ color: 'var(--text)', fontSize: 14, flex: 1 }}>{msg}</span>
+      <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, flexShrink: 0 }}>×</button>
+    </div>
+  );
+}
+
+function FormField({ label, children, style: st = {} }) {
+  return <div style={{ marginBottom: 18, ...st }}><label style={S.label}>{label}</label>{children}</div>;
+}
+
+function StatusBadge({ status }) {
+  const map = {
+    confirmed: { label: 'Confirmado', bg: '#0D2B1A', color: '#3DCF8E' },
+    pending:   { label: 'Pendente',   bg: '#2B2100', color: '#F0A500' },
+    cancelled: { label: 'Cancelado',  bg: '#2B0D0D', color: '#E05555' },
+    done:      { label: 'Concluído',  bg: '#1A1A2B', color: '#7B8FE8' },
+  };
+  const s = map[status] || map.pending;
+  return <span style={{ ...S.badge, background: s.bg, color: s.color }}>{s.label}</span>;
+}
+
+// =============================================
+// PAGE — LANDING
+// =============================================
+function LandingPage() {
+  const { setPage, barbers, services } = useApp();
+  return (
+    <div>
+      <div style={{ position: 'relative', minHeight: '92vh', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 80% 60% at 50% 40%, #1A1400 0%, #0A0A0A 100%)' }} />
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 60px,#1A1600 61px),repeating-linear-gradient(90deg,transparent,transparent 60px,#1A1600 61px)', opacity: 0.15 }} />
+        <div style={{ position: 'relative', zIndex: 1, padding: '0 24px' }}>
+          <p style={{ color: 'var(--gold)', fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', marginBottom: 20 }}>Est. 2020</p>
+          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 'clamp(52px,10vw,96px)', lineHeight: 1, color: 'var(--text)', marginBottom: 12 }}>{CONFIG.shopName}</h1>
+          <div style={{ width: 80, height: 2, background: 'var(--gold)', margin: '0 auto 20px' }} />
+          <p style={{ color: 'var(--text-muted)', fontSize: 18, maxWidth: 460, margin: '0 auto 48px' }}>{CONFIG.shopSlogan}</p>
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => setPage('booking')} style={{ ...S.goldBtn, padding: '14px 36px', fontSize: 16, borderRadius: 50 }}>Agendar Horário</button>
+            <button onClick={() => document.getElementById('svc').scrollIntoView({ behavior: 'smooth' })} style={{ ...S.outlineBtn, padding: '14px 36px', fontSize: 16, borderRadius: 50 }}>Ver Serviços</button>
+          </div>
+        </div>
+        <div style={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', color: 'var(--text-dim)', fontSize: 12, letterSpacing: 3, textTransform: 'uppercase' }}>↓ explorar</div>
+      </div>
+
+      <div style={{ background: 'var(--gold)', padding: '16px 24px', display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {[{ icon: '📍', text: CONFIG.shopAddress }, { icon: '📞', text: CONFIG.shopPhone }, { icon: '🕐', text: CONFIG.shopHours }].map((item, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#000', fontSize: 14, fontWeight: 500 }}>
+            <span>{item.icon}</span>{item.text}
+          </div>
+        ))}
+      </div>
+
+      <div id="svc" style={{ maxWidth: 1100, margin: '0 auto', padding: '80px 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 56 }}>
+          <p style={{ color: 'var(--gold)', fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', marginBottom: 12 }}>O que fazemos</p>
+          <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 42, color: 'var(--text)', marginBottom: 12 }}>Nossos Serviços</h2>
+          <GoldLine />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 20 }}>
+          {services.map(s => (
+            <div key={s.id} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--gold-dim)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = '#2A2520'}>
+              <div>
+                <h3 style={{ fontSize: 17, color: 'var(--text)', marginBottom: 6, fontWeight: 500 }}>{s.name}</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>{s.description}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 8 }}>⏱ {s.duration} min</p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 16 }}>
+                <div style={{ fontSize: 22, color: 'var(--gold)', fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>{fmtPrice(s.price)}</div>
+                <button onClick={() => setPage('booking')} style={{ ...S.outlineBtn, padding: '6px 14px', fontSize: 12, marginTop: 8 }}>Agendar</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--surface)', padding: '80px 24px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 56 }}>
+            <p style={{ color: 'var(--gold)', fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', marginBottom: 12 }}>Conheça</p>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 42, color: 'var(--text)', marginBottom: 12 }}>Nossa Equipe</h2>
+            <GoldLine />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 24 }}>
+            {barbers.map(b => (
+              <div key={b.id} style={{ ...S.card, textAlign: 'center' }}>
+                <Avatar name={b.name} size={72} st={{ margin: '0 auto 16px' }} />
+                <h3 style={{ fontSize: 18, fontFamily: "'Playfair Display', serif", color: 'var(--text)', marginBottom: 4 }}>{b.name}</h3>
+                <p style={{ fontSize: 12, color: 'var(--gold)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>{b.role}</p>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>{b.bio}</p>
+                <button onClick={() => setPage('booking')} style={{ ...S.goldBtn, marginTop: 20, width: '100%' }}>Agendar com {b.name.split(' ')[0]}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ textAlign: 'center', padding: '80px 24px', background: 'var(--dark)' }}>
+        <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 40, color: 'var(--text)', marginBottom: 16 }}>Pronto para o seu melhor corte?</h2>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 36, fontSize: 16 }}>Agende agora mesmo, de onde estiver.</p>
+        <button onClick={() => setPage('booking')} style={{ ...S.goldBtn, padding: '16px 48px', fontSize: 17, borderRadius: 50 }}>Agendar Agora →</button>
+      </div>
+
+      <div style={{ background: 'var(--black)', borderTop: '1px solid #1A1A1A', padding: 24, textAlign: 'center' }}>
+        <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>{CONFIG.shopName} © {new Date().getFullYear()} · Todos os direitos reservados</p>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// PAGE — AUTH
+// =============================================
+function AuthPage() {
+  const { setUser, setPage, showToast, reloadData } = useApp();
+  const [tab, setTab] = React.useState('login');
+  const [form, setForm] = React.useState({ name: '', email: '', password: '', phone: '' });
+  const [loading, setLoading] = React.useState(false);
+
+  const handleLogin = async () => {
+    if (!form.email || !form.password) { showToast('Preencha e-mail e senha', 'error'); return; }
+    setLoading(true);
+    const { user, error } = await DB.signIn(form.email, form.password);
+    if (error) {
+      const msg = error.message.includes('Invalid') ? 'E-mail ou senha incorretos' : error.message;
+      showToast(msg, 'error');
+    } else {
+      setUser(user);
+      await reloadData();
+      showToast(`Bem-vindo, ${user.name || user.email}!`, 'success');
+      if (user.role === 'admin') setPage('admin');
+      else if (user.role === 'barber') setPage('barber-dashboard');
+      else setPage('my-appointments');
+    }
+    setLoading(false);
+  };
+
+  const handleRegister = async () => {
+    if (!form.name || !form.email || !form.password) { showToast('Preencha todos os campos', 'error'); return; }
+    if (form.password.length < 6) { showToast('Senha precisa ter ao menos 6 caracteres', 'error'); return; }
+    setLoading(true);
+    const { user, error } = await DB.signUp(form.email, form.password, form.name, form.phone);
+    if (error) {
+      const msg = error.message.includes('already registered') ? 'E-mail já cadastrado' : error.message;
+      showToast(msg, 'error');
+    } else {
+      showToast('Conta criada! Verifique seu e-mail para confirmar o cadastro.', 'success');
+      setTab('login');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 420 }}>
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: 'var(--gold)', marginBottom: 8 }}>{CONFIG.shopName}</h1>
+          <p style={{ color: 'var(--text-muted)' }}>{tab === 'login' ? 'Entre na sua conta' : 'Crie sua conta'}</p>
+        </div>
+        <div style={{ ...S.card }}>
+          <div style={{ display: 'flex', marginBottom: 28, background: 'var(--dark)', borderRadius: 'var(--radius)', padding: 4 }}>
+            {['login','register'].map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none', background: tab===t ? 'var(--surface)' : 'transparent', color: tab===t ? 'var(--gold)' : 'var(--text-muted)', fontSize: 14, fontWeight: tab===t ? 500 : 400 }}>
+                {t === 'login' ? 'Entrar' : 'Cadastrar'}
+              </button>
+            ))}
+          </div>
+          {tab === 'register' && (
+            <FormField label="Nome Completo *">
+              <input style={S.input} value={form.name} onChange={e => setForm(p=>({...p,name:e.target.value}))} placeholder="Seu nome completo" />
+            </FormField>
+          )}
+          <FormField label="E-mail *">
+            <input style={S.input} type="email" value={form.email} onChange={e => setForm(p=>({...p,email:e.target.value}))} placeholder="seu@email.com" />
+          </FormField>
+          <FormField label="Senha *">
+            <input style={S.input} type="password" value={form.password} onChange={e => setForm(p=>({...p,password:e.target.value}))} placeholder="Mín. 6 caracteres" onKeyDown={e => e.key==='Enter' && tab==='login' && handleLogin()} />
+          </FormField>
+          {tab === 'register' && (
+            <FormField label="WhatsApp (opcional)">
+              <input style={S.input} value={form.phone} onChange={e => setForm(p=>({...p,phone:e.target.value}))} placeholder="(44) 99999-0000" />
+            </FormField>
+          )}
+          <button onClick={tab==='login' ? handleLogin : handleRegister} disabled={loading}
+            style={{ ...S.goldBtn, width: '100%', padding: 14, fontSize: 15, marginTop: 4, opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Aguarde...' : tab==='login' ? 'Entrar' : 'Criar Conta'}
+          </button>
+          <div style={S.divider} />
+          <p style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center' }}>
+            Admin: {CONFIG.adminEmail} / {CONFIG.adminPassword}<br/>
+            Demo Barbeiro: carlos@barberpro.com / demo123
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// PAGE — BOOKING WIZARD
+// =============================================
+function BookingPage() {
+  const { user, setPage, barbers, services, appointments, addAppointment, showToast } = useApp();
+  const [step, setStep] = React.useState(1);
+  const [sel, setSel] = React.useState({ barber: null, service: null, date: today(), time: null });
+  const [form, setForm] = React.useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', notes: '' });
+  const [bookedSlots, setBookedSlots] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (sel.barber && sel.date) {
+      const taken = appointments
+        .filter(a => String(a.barber_id) === String(sel.barber.id) && a.date === sel.date && a.status !== 'cancelled')
+        .map(a => typeof a.time === 'string' ? a.time.substring(0,5) : a.time);
+      setBookedSlots(taken);
+    }
+  }, [sel.barber, sel.date, appointments]);
+
+  const slots = generateTimeSlots();
+  const canNext = () => {
+    if (step === 1) return !!sel.barber;
+    if (step === 2) return !!sel.service;
+    if (step === 3) return !!sel.date && !!sel.time;
+    return false;
+  };
+
+  const handleConfirm = async () => {
+    if (!user && (!form.name || !form.email)) { showToast('Preencha seu nome e e-mail', 'error'); return; }
+    setLoading(true);
+    const apt = {
+      barber_id: sel.barber.id,
+      barber_name: sel.barber.name,
+      service_id: sel.service.id,
+      service_name: sel.service.name,
+      service_price: sel.service.price,
+      date: sel.date,
+      time: sel.time + ':00',
+      client_name: user?.name || form.name,
+      client_email: user?.email || form.email,
+      client_phone: user?.phone || form.phone,
+      notes: form.notes,
+      status: 'confirmed',
+    };
+    const { data, error } = await addAppointment(apt);
+    if (error) {
+      showToast('Erro ao agendar. Tente novamente.', 'error');
+    } else {
+      showToast('Agendamento confirmado! ✓', 'success');
+      setStep(5);
+    }
+    setLoading(false);
+  };
+
+  const steps = ['Barbeiro', 'Serviço', 'Data & Hora', 'Confirmar'];
+
+  return (
+    <div style={{ maxWidth: 760, margin: '0 auto', padding: '40px 24px' }}>
+      <button onClick={() => setPage('home')} style={{ ...S.ghostBtn, marginBottom: 32, display: 'flex', alignItems: 'center', gap: 6 }}>← Voltar</button>
+
+      {step < 5 && <>
+        <h1 style={S.sectionTitle}>Agendar Horário</h1>
+        <p style={S.sectionSub}>Siga os passos para garantir o seu atendimento</p>
+        <div style={{ display: 'flex', marginBottom: 40 }}>
+          {steps.map((s, i) => {
+            const num = i+1; const active = step===num; const done = step>num;
+            return (
+              <React.Fragment key={i}>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, background: (done||active) ? 'var(--gold)' : 'var(--dark3)', color: (done||active) ? '#000' : 'var(--text-dim)' }}>
+                    {done ? '✓' : num}
+                  </div>
+                  <div style={{ fontSize: 11, color: active ? 'var(--gold)' : 'var(--text-dim)', fontWeight: active ? 600 : 400 }}>{s}</div>
+                </div>
+                {i < steps.length-1 && <div style={{ flex: 0.5, height: 1, background: step>i+1 ? 'var(--gold)' : 'var(--dark4)', alignSelf: 'center', marginBottom: 28 }} />}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </>}
+
+      {step === 1 && (
+        <div style={{ display: 'grid', gap: 16 }}>
+          {barbers.map(b => (
+            <div key={b.id} onClick={() => setSel(p=>({...p, barber:b}))}
+              style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 20, cursor: 'pointer', borderColor: sel.barber?.id===b.id ? 'var(--gold)' : '#2A2520' }}>
+              <Avatar name={b.name} size={60} />
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: 17, color: 'var(--text)', marginBottom: 4 }}>{b.name}</h3>
+                <p style={{ fontSize: 12, color: 'var(--gold)', letterSpacing: 1, textTransform: 'uppercase' }}>{b.role}</p>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{b.bio}</p>
+              </div>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${sel.barber?.id===b.id ? 'var(--gold)' : 'var(--dark4)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {sel.barber?.id===b.id && <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--gold)' }} />}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {step === 2 && (
+        <div style={{ display: 'grid', gap: 14 }}>
+          {services.map(s => (
+            <div key={s.id} onClick={() => setSel(p=>({...p, service:s}))}
+              style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderColor: sel.service?.id===s.id ? 'var(--gold)' : '#2A2520' }}>
+              <div>
+                <h3 style={{ fontSize: 16, color: 'var(--text)', marginBottom: 4 }}>{s.name}</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{s.description}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6 }}>⏱ {s.duration} minutos</p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 16 }}>
+                <div style={{ fontSize: 22, color: 'var(--gold)', fontWeight: 600 }}>{fmtPrice(s.price)}</div>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${sel.service?.id===s.id ? 'var(--gold)' : 'var(--dark4)'}`, margin: '8px 0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {sel.service?.id===s.id && <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--gold)' }} />}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {step === 3 && (
+        <div>
+          <FormField label="Data do Atendimento">
+            <input type="date" style={S.input} min={today()} max={addDays(today(), 30)} value={sel.date}
+              onChange={e => setSel(p=>({...p, date:e.target.value, time:null}))} />
+          </FormField>
+          <div style={{ marginTop: 24 }}>
+            <label style={S.label}>Horários Disponíveis</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(80px,1fr))', gap: 10 }}>
+              {slots.map(slot => {
+                const available = !bookedSlots.includes(slot);
+                const selected = sel.time === slot;
+                return (
+                  <button key={slot} disabled={!available} onClick={() => setSel(p=>({...p,time:slot}))}
+                    style={{ padding: '10px 8px', borderRadius: 'var(--radius)', border: `1px solid ${selected ? 'var(--gold)' : available ? 'var(--dark4)' : 'var(--dark3)'}`, background: selected ? 'var(--gold)' : available ? 'var(--dark2)' : 'var(--dark)', color: selected ? '#000' : available ? 'var(--text)' : 'var(--text-dim)', fontSize: 14, fontWeight: selected ? 600 : 400, cursor: available ? 'pointer' : 'not-allowed' }}>
+                    {slot}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 4 && (
+        <div>
+          <div style={{ ...S.card, marginBottom: 24, borderColor: 'var(--gold-dim)' }}>
+            <h3 style={{ color: 'var(--gold)', fontFamily: "'Playfair Display', serif", marginBottom: 16 }}>Resumo do Agendamento</h3>
+            {[
+              { label: 'Barbeiro', value: sel.barber?.name },
+              { label: 'Serviço', value: sel.service?.name },
+              { label: 'Valor', value: fmtPrice(sel.service?.price) },
+              { label: 'Duração', value: `${sel.service?.duration} min` },
+              { label: 'Data', value: fmtDate(sel.date) },
+              { label: 'Horário', value: sel.time },
+            ].map((r, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: i<5 ? '1px solid #2A2520' : 'none' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>{r.label}</span>
+                <span style={{ color: r.label==='Valor' ? 'var(--gold)' : 'var(--text)', fontWeight: r.label==='Valor' ? 600 : 400, fontSize: 14 }}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+          {!user && (
+            <div>
+              <div style={S.divider} />
+              <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>Seus dados para contato</p>
+              <FormField label="Nome Completo *"><input style={S.input} value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="Seu nome" /></FormField>
+              <FormField label="E-mail *"><input style={S.input} type="email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))} placeholder="seu@email.com" /></FormField>
+              <FormField label="WhatsApp"><input style={S.input} value={form.phone} onChange={e=>setForm(p=>({...p,phone:e.target.value}))} placeholder="(44) 99999-0000" /></FormField>
+              <FormField label="Observações"><textarea style={{ ...S.input, minHeight: 80, resize: 'vertical' }} value={form.notes} onChange={e=>setForm(p=>({...p,notes:e.target.value}))} /></FormField>
+            </div>
+          )}
+          <button onClick={handleConfirm} disabled={loading}
+            style={{ ...S.goldBtn, width: '100%', padding: 16, fontSize: 16, marginTop: 8, opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Confirmando...' : 'Confirmar Agendamento →'}
+          </button>
+        </div>
+      )}
+
+      {step === 5 && (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--dark3)', border: '2px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: 36, color: 'var(--gold)' }}>✓</div>
+          <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: 'var(--gold)', marginBottom: 12 }}>Agendado!</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: 16, marginBottom: 8 }}>Horário com <strong style={{ color: 'var(--text)' }}>{sel.barber?.name}</strong> confirmado.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 15, marginBottom: 32 }}>📅 {fmtDate(sel.date)} às {sel.time} · {sel.service?.name}</p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => setPage('home')} style={S.outlineBtn}>Voltar ao início</button>
+            {user && <button onClick={() => setPage('my-appointments')} style={S.goldBtn}>Ver meus agendamentos</button>}
+          </div>
+        </div>
+      )}
+
+      {step < 4 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32 }}>
+          <button onClick={() => setStep(s=>s-1)} disabled={step===1} style={{ ...S.ghostBtn, opacity: step===1 ? 0.4 : 1 }}>← Anterior</button>
+          <button onClick={() => setStep(s=>s+1)} disabled={!canNext()} style={{ ...S.goldBtn, opacity: canNext() ? 1 : 0.4 }}>
+            {step===3 ? 'Revisar →' : 'Próximo →'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// PAGE — MY APPOINTMENTS
+// =============================================
+function MyAppointmentsPage() {
+  const { user, appointments, updateAptStatus, showToast } = useApp();
+  const myApts = appointments
+    .filter(a => a.client_email === user?.email)
+    .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+
+  const cancel = async (id) => {
+    await updateAptStatus(id, 'cancelled');
+    showToast('Agendamento cancelado', 'info');
+  };
+
+  return (
+    <div style={{ maxWidth: 760, margin: '0 auto', padding: '40px 24px' }}>
+      <h1 style={S.sectionTitle}>Meus Agendamentos</h1>
+      <p style={S.sectionSub}>Histórico dos seus atendimentos</p>
+      {myApts.length === 0 ? (
+        <div style={{ ...S.card, textAlign: 'center', padding: 48 }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: 16 }}>Você ainda não tem agendamentos.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {myApts.map(a => (
+            <div key={a.id} style={S.card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <h3 style={{ fontSize: 17, color: 'var(--text)' }}>{a.service_name}</h3>
+                    <StatusBadge status={a.status} />
+                  </div>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>✂️ {a.barber_name}</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>📅 {fmtDate(a.date)} às {typeof a.time === 'string' ? a.time.substring(0,5) : a.time}</p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 20, color: 'var(--gold)', fontWeight: 600, marginBottom: 8 }}>{fmtPrice(a.service_price)}</div>
+                  {a.status === 'confirmed' && a.date >= today() && (
+                    <button onClick={() => cancel(a.id)} style={{ ...S.ghostBtn, fontSize: 12, padding: '6px 12px', color: 'var(--danger)', borderColor: 'var(--danger)' }}>Cancelar</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// PAGE — BARBER DASHBOARD
+// =============================================
+function BarberDashboard() {
+  const { user, barbers, appointments, updateAptStatus, services, updateService, showToast } = useApp();
+  const barber = barbers.find(b => String(b.id) === String(user?.barber_id));
+  const [activeTab, setActiveTab] = React.useState('agenda');
+  const [editService, setEditService] = React.useState(null);
+  const [myServices, setMyServices] = React.useState(services);
+  const [selDate, setSelDate] = React.useState(today());
+
+  React.useEffect(() => { setMyServices(services); }, [services]);
+
+  const myApts = appointments
+    .filter(a => barber && String(a.barber_id) === String(barber.id) && a.date === selDate)
+    .sort((a, b) => a.time.localeCompare(b.time));
+  const todayApts = appointments.filter(a => barber && String(a.barber_id) === String(barber.id) && a.date === today());
+  const revenue = todayApts.filter(a => a.status === 'confirmed' || a.status === 'done').reduce((s, a) => s + Number(a.service_price), 0);
+
+  if (!barber) return (
+    <div style={{ maxWidth: 760, margin: '0 auto', padding: '80px 24px', textAlign: 'center' }}>
+      <p style={{ color: 'var(--text-muted)', fontSize: 16 }}>Perfil de barbeiro não encontrado. Contate o administrador.</p>
+    </div>
+  );
+
+  const updateStatus = async (id, status) => {
+    await updateAptStatus(id, status);
+    showToast('Status atualizado', 'success');
+  };
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 36 }}>
+        <Avatar name={barber.name} size={64} />
+        <div>
+          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: 'var(--text)' }}>{barber.name}</h1>
+          <p style={{ color: 'var(--gold)', fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' }}>{barber.role}</p>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 16, marginBottom: 32 }}>
+        {[
+          { label: 'Hoje', value: todayApts.length, unit: 'agendamentos' },
+          { label: 'Faturamento hoje', value: fmtPrice(revenue), unit: '' },
+          { label: 'Total geral', value: appointments.filter(a => String(a.barber_id)===String(barber.id)).length, unit: 'agend.' },
+        ].map((m, i) => (
+          <div key={i} style={{ background: 'var(--surface)', border: '1px solid #2A2520', borderRadius: 'var(--radius-lg)', padding: '20px 18px' }}>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{m.label}</p>
+            <p style={{ fontSize: 26, color: 'var(--gold)', fontFamily: "'Playfair Display', serif" }}>{m.value}</p>
+            {m.unit && <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{m.unit}</p>}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 4, marginBottom: 28, background: 'var(--dark)', borderRadius: 'var(--radius)', padding: 4, width: 'fit-content' }}>
+        {[{id:'agenda',label:'Minha Agenda'},{id:'services',label:'Serviços & Preços'}].map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ padding: '10px 20px', borderRadius: 6, border: 'none', background: activeTab===t.id ? 'var(--surface)' : 'transparent', color: activeTab===t.id ? 'var(--gold)' : 'var(--text-muted)', fontSize: 14, fontWeight: activeTab===t.id ? 500 : 400 }}>{t.label}</button>
+        ))}
+      </div>
+
+      {activeTab === 'agenda' && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+            <label style={{ color: 'var(--text-muted)', fontSize: 14 }}>Ver agenda de:</label>
+            <input type="date" style={{ ...S.input, width: 'auto' }} value={selDate} onChange={e => setSelDate(e.target.value)} />
+          </div>
+          {myApts.length === 0 ? (
+            <div style={{ ...S.card, textAlign: 'center', padding: 40 }}><p style={{ color: 'var(--text-muted)' }}>Nenhum agendamento para {fmtDate(selDate)}</p></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {myApts.map(a => (
+                <div key={a.id} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                      <span style={{ fontSize: 18, color: 'var(--gold)', fontWeight: 500 }}>{typeof a.time==='string' ? a.time.substring(0,5) : a.time}</span>
+                      <StatusBadge status={a.status} />
+                    </div>
+                    <p style={{ color: 'var(--text)', fontSize: 15 }}>{a.client_name} · {a.service_name}</p>
+                    {a.client_phone && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>📱 {a.client_phone}</p>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: 18, color: 'var(--gold)', fontWeight: 600 }}>{fmtPrice(a.service_price)}</span>
+                    {a.status === 'confirmed' && <>
+                      <button onClick={() => updateStatus(a.id, 'done')} style={{ ...S.goldBtn, padding: '7px 14px', fontSize: 12 }}>Concluir</button>
+                      <button onClick={() => updateStatus(a.id, 'cancelled')} style={{ ...S.ghostBtn, padding: '7px 14px', fontSize: 12, color: 'var(--danger)', borderColor: 'var(--danger)' }}>Cancelar</button>
+                    </>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'services' && (
+        <div>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>Edite os serviços e valores que você oferece</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {myServices.map((s, i) => (
+              <div key={s.id} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ fontSize: 16, color: 'var(--text)' }}>{s.name}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>⏱ {s.duration} min</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 20, color: 'var(--gold)', fontWeight: 600 }}>{fmtPrice(s.price)}</span>
+                  <button onClick={() => setEditService({ ...s, idx: i })} style={{ ...S.outlineBtn, padding: '7px 14px', fontSize: 12 }}>Editar</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {editService && (
+        <Modal title="Editar Serviço" onClose={() => setEditService(null)}>
+          <FormField label="Nome"><input style={S.input} value={editService.name} onChange={e=>setEditService(p=>({...p,name:e.target.value}))} /></FormField>
+          <FormField label="Preço (R$)"><input style={S.input} type="number" step="0.01" value={editService.price} onChange={e=>setEditService(p=>({...p,price:e.target.value}))} /></FormField>
+          <FormField label="Duração (min)"><input style={S.input} type="number" value={editService.duration} onChange={e=>setEditService(p=>({...p,duration:e.target.value}))} /></FormField>
+          <FormField label="Descrição"><textarea style={{ ...S.input, minHeight: 70 }} value={editService.description || ''} onChange={e=>setEditService(p=>({...p,description:e.target.value}))} /></FormField>
+          <button onClick={async () => {
+            const { idx, ...svcData } = editService;
+            const { error } = await updateService(svcData.id, { name: svcData.name, price: Number(svcData.price), duration: Number(svcData.duration), description: svcData.description });
+            if (!error) { const upd=[...myServices]; upd[idx]=svcData; setMyServices(upd); setEditService(null); showToast('Serviço atualizado!','success'); }
+            else showToast('Erro ao salvar','error');
+          }} style={{ ...S.goldBtn, width: '100%', padding: 14 }}>Salvar Alterações</button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// PAGE — ADMIN DASHBOARD
+// =============================================
+function AdminDashboard() {
+  const { appointments, barbers, services, addBarber, updateBarber, deleteBarber, addService, updateService, deleteService, showToast, reloadData } = useApp();
+  const [activeTab, setActiveTab] = React.useState('overview');
+  const [showAddBarber, setShowAddBarber] = React.useState(false);
+  const [showAddService, setShowAddService] = React.useState(false);
+  const [editBarber, setEditBarber] = React.useState(null);
+  const [editService, setEditService] = React.useState(null);
+  const [newBarber, setNewBarber] = React.useState({ name: '', role: 'Barber', bio: '', email: '' });
+  const [newService, setNewService] = React.useState({ name: '', price: '', duration: 30, description: '' });
+
+  const totalRevenue = appointments.filter(a => a.status !== 'cancelled').reduce((s, a) => s + Number(a.service_price), 0);
+  const todayApts = appointments.filter(a => a.date === today());
+
+  const doAddBarber = async () => {
+    if (!newBarber.name) { showToast('Nome obrigatório', 'error'); return; }
+    const { error } = await addBarber(newBarber);
+    if (error) { showToast('Erro: ' + error.message, 'error'); return; }
+    setNewBarber({ name: '', role: 'Barber', bio: '', email: '' });
+    setShowAddBarber(false);
+    showToast('Colaborador adicionado!', 'success');
+  };
+
+  const doAddService = async () => {
+    if (!newService.name || !newService.price) { showToast('Preencha nome e preço', 'error'); return; }
+    const { error } = await addService({ ...newService, price: Number(newService.price), duration: Number(newService.duration) });
+    if (error) { showToast('Erro: ' + error.message, 'error'); return; }
+    setNewService({ name: '', price: '', duration: 30, description: '' });
+    setShowAddService(false);
+    showToast('Serviço adicionado!', 'success');
+  };
+
+  return (
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 36, flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <h1 style={S.sectionTitle}>Painel Administrativo</h1>
+          <p style={{ color: 'var(--text-muted)' }}>{CONFIG.shopName} · Gestão completa</p>
+        </div>
+        <button onClick={reloadData} style={{ ...S.ghostBtn, fontSize: 12 }}>↺ Atualizar dados</button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 2, marginBottom: 32, background: 'var(--dark)', borderRadius: 'var(--radius)', padding: 4, overflowX: 'auto' }}>
+        {[{id:'overview',label:'Visão Geral'},{id:'barbers',label:'Colaboradores'},{id:'services',label:'Serviços'},{id:'appointments',label:'Agendamentos'}].map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ padding: '10px 18px', borderRadius: 6, border: 'none', background: activeTab===t.id ? 'var(--surface)' : 'transparent', color: activeTab===t.id ? 'var(--gold)' : 'var(--text-muted)', fontSize: 13, fontWeight: activeTab===t.id ? 500 : 400, whiteSpace: 'nowrap' }}>{t.label}</button>
+        ))}
+      </div>
+
+      {activeTab === 'overview' && (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16, marginBottom: 32 }}>
+            {[
+              { label: 'Total agendamentos', value: appointments.length },
+              { label: 'Confirmados', value: appointments.filter(a=>a.status==='confirmed').length },
+              { label: 'Hoje', value: todayApts.length },
+              { label: 'Faturamento total', value: fmtPrice(totalRevenue) },
+            ].map((m, i) => (
+              <div key={i} style={{ background: 'var(--surface)', border: '1px solid #2A2520', borderRadius: 'var(--radius-lg)', padding: '20px 18px' }}>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{m.label}</p>
+                <p style={{ fontSize: 24, color: 'var(--gold)', fontFamily: "'Playfair Display', serif" }}>{m.value}</p>
+              </div>
+            ))}
+          </div>
+          <h3 style={{ color: 'var(--text)', fontFamily: "'Playfair Display', serif", fontSize: 20, marginBottom: 16 }}>Últimos Agendamentos</h3>
+          {appointments.length === 0 ? (
+            <div style={{ ...S.card, textAlign: 'center', padding: 40 }}><p style={{ color: 'var(--text-muted)' }}>Nenhum agendamento ainda</p></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[...appointments].slice(0,8).map(a => (
+                <div key={a.id} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                  <div>
+                    <p style={{ color: 'var(--text)', fontSize: 15 }}>{a.client_name} · <span style={{ color: 'var(--text-muted)' }}>{a.service_name} com {a.barber_name}</span></p>
+                    <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>📅 {fmtDate(a.date)} às {typeof a.time==='string' ? a.time.substring(0,5) : a.time}</p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ color: 'var(--gold)', fontWeight: 600 }}>{fmtPrice(a.service_price)}</span>
+                    <StatusBadge status={a.status} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'barbers' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+            <button onClick={() => setShowAddBarber(true)} style={S.goldBtn}>+ Adicionar Colaborador</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {barbers.map(b => (
+              <div key={b.id} style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                <Avatar name={b.name} size={52} />
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: 16, color: 'var(--text)' }}>{b.name}</h3>
+                  <p style={{ fontSize: 12, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: 1 }}>{b.role}</p>
+                  {b.email && <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>✉️ {b.email}</p>}
+                  {b.bio && <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{b.bio}</p>}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setEditBarber({...b})} style={{ ...S.outlineBtn, padding: '7px 14px', fontSize: 12 }}>Editar</button>
+                  <button onClick={async () => { await deleteBarber(b.id); showToast('Removido','info'); }} style={{ ...S.ghostBtn, padding: '7px 14px', fontSize: 12, color: 'var(--danger)', borderColor: 'var(--danger)' }}>Remover</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'services' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+            <button onClick={() => setShowAddService(true)} style={S.goldBtn}>+ Adicionar Serviço</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {services.map(s => (
+              <div key={s.id} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <h3 style={{ fontSize: 16, color: 'var(--text)' }}>{s.name}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{s.description}</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>⏱ {s.duration} min</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 20, color: 'var(--gold)', fontWeight: 600 }}>{fmtPrice(s.price)}</span>
+                  <button onClick={() => setEditService({...s})} style={{ ...S.outlineBtn, padding: '7px 14px', fontSize: 12 }}>Editar</button>
+                  <button onClick={async () => { await deleteService(s.id); showToast('Removido','info'); }} style={{ ...S.ghostBtn, padding: '7px 14px', fontSize: 12, color: 'var(--danger)', borderColor: 'var(--danger)' }}>Remover</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'appointments' && (
+        <div>
+          {appointments.length === 0 ? (
+            <div style={{ ...S.card, textAlign: 'center', padding: 48 }}><p style={{ color: 'var(--text-muted)' }}>Nenhum agendamento ainda</p></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {appointments.map(a => (
+                <div key={a.id} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: 'var(--text)', fontSize: 15 }}>{a.client_name}</span>
+                      <StatusBadge status={a.status} />
+                    </div>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{a.service_name} · ✂️ {a.barber_name}</p>
+                    <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>📅 {fmtDate(a.date)} às {typeof a.time==='string' ? a.time.substring(0,5) : a.time}</p>
+                    {a.client_email && <p style={{ color: 'var(--text-dim)', fontSize: 12 }}>✉️ {a.client_email}</p>}
+                  </div>
+                  <span style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 18 }}>{fmtPrice(a.service_price)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODALS */}
+      {showAddBarber && (
+        <Modal title="Adicionar Colaborador" onClose={() => setShowAddBarber(false)}>
+          <FormField label="Nome *"><input style={S.input} value={newBarber.name} onChange={e=>setNewBarber(p=>({...p,name:e.target.value}))} placeholder="Nome completo" /></FormField>
+          <FormField label="Cargo">
+            <select style={S.input} value={newBarber.role} onChange={e=>setNewBarber(p=>({...p,role:e.target.value}))}>
+              <option>Barber</option><option>Senior Barber</option><option>Master Barber</option><option>Proprietário</option>
+            </select>
+          </FormField>
+          <FormField label="E-mail"><input style={S.input} type="email" value={newBarber.email} onChange={e=>setNewBarber(p=>({...p,email:e.target.value}))} placeholder="email@barbearia.com" /></FormField>
+          <FormField label="Bio"><textarea style={{ ...S.input, minHeight: 80 }} value={newBarber.bio} onChange={e=>setNewBarber(p=>({...p,bio:e.target.value}))} placeholder="Experiência e especialidades" /></FormField>
+          <button onClick={doAddBarber} style={{ ...S.goldBtn, width: '100%', padding: 14 }}>Adicionar</button>
+        </Modal>
+      )}
+
+      {showAddService && (
+        <Modal title="Adicionar Serviço" onClose={() => setShowAddService(false)}>
+          <FormField label="Nome *"><input style={S.input} value={newService.name} onChange={e=>setNewService(p=>({...p,name:e.target.value}))} placeholder="Ex: Corte Clássico" /></FormField>
+          <FormField label="Preço (R$) *"><input style={S.input} type="number" step="0.01" value={newService.price} onChange={e=>setNewService(p=>({...p,price:e.target.value}))} /></FormField>
+          <FormField label="Duração (min)"><input style={S.input} type="number" value={newService.duration} onChange={e=>setNewService(p=>({...p,duration:e.target.value}))} /></FormField>
+          <FormField label="Descrição"><textarea style={{ ...S.input, minHeight: 70 }} value={newService.description} onChange={e=>setNewService(p=>({...p,description:e.target.value}))} /></FormField>
+          <button onClick={doAddService} style={{ ...S.goldBtn, width: '100%', padding: 14 }}>Adicionar</button>
+        </Modal>
+      )}
+
+      {editBarber && (
+        <Modal title="Editar Colaborador" onClose={() => setEditBarber(null)}>
+          <FormField label="Nome"><input style={S.input} value={editBarber.name} onChange={e=>setEditBarber(p=>({...p,name:e.target.value}))} /></FormField>
+          <FormField label="Cargo">
+            <select style={S.input} value={editBarber.role} onChange={e=>setEditBarber(p=>({...p,role:e.target.value}))}>
+              <option>Barber</option><option>Senior Barber</option><option>Master Barber</option><option>Proprietário</option>
+            </select>
+          </FormField>
+          <FormField label="E-mail"><input style={S.input} type="email" value={editBarber.email||''} onChange={e=>setEditBarber(p=>({...p,email:e.target.value}))} /></FormField>
+          <FormField label="Bio"><textarea style={{ ...S.input, minHeight: 80 }} value={editBarber.bio||''} onChange={e=>setEditBarber(p=>({...p,bio:e.target.value}))} /></FormField>
+          <button onClick={async () => {
+            const { id, ...ch } = editBarber;
+            const { error } = await updateBarber(id, ch);
+            if (!error) { setEditBarber(null); showToast('Salvo!','success'); } else showToast('Erro','error');
+          }} style={{ ...S.goldBtn, width: '100%', padding: 14 }}>Salvar</button>
+        </Modal>
+      )}
+
+      {editService && (
+        <Modal title="Editar Serviço" onClose={() => setEditService(null)}>
+          <FormField label="Nome"><input style={S.input} value={editService.name} onChange={e=>setEditService(p=>({...p,name:e.target.value}))} /></FormField>
+          <FormField label="Preço (R$)"><input style={S.input} type="number" step="0.01" value={editService.price} onChange={e=>setEditService(p=>({...p,price:e.target.value}))} /></FormField>
+          <FormField label="Duração (min)"><input style={S.input} type="number" value={editService.duration} onChange={e=>setEditService(p=>({...p,duration:e.target.value}))} /></FormField>
+          <FormField label="Descrição"><textarea style={{ ...S.input, minHeight: 70 }} value={editService.description||''} onChange={e=>setEditService(p=>({...p,description:e.target.value}))} /></FormField>
+          <button onClick={async () => {
+            const { id, ...ch } = editService;
+            const { error } = await updateService(id, { ...ch, price: Number(ch.price), duration: Number(ch.duration) });
+            if (!error) { setEditService(null); showToast('Salvo!','success'); } else showToast('Erro','error');
+          }} style={{ ...S.goldBtn, width: '100%', padding: 14 }}>Salvar</button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// HEADER
+// =============================================
+function Header() {
+  const { page, setPage, user, logout } = useApp();
+  const [menuOpen, setMenuOpen] = React.useState(false);
+
+  // Fecha menu ao clicar fora
+  React.useEffect(() => {
+    const close = () => setMenuOpen(false);
+    if (menuOpen) document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [menuOpen]);
+
+  return (
+    <header style={S.header}>
+      <button onClick={() => setPage('home')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+        <span style={S.logo}>{CONFIG.shopName}</span>
+      </button>
+      <nav style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+        {[{id:'home',label:'Início'},{id:'booking',label:'Agendar'}].map(l => (
+          <button key={l.id} onClick={() => setPage(l.id)} style={{ background: 'none', border: 'none', color: page===l.id ? 'var(--gold)' : 'var(--text-muted)', fontSize: 14, cursor: 'pointer', fontWeight: page===l.id ? 500 : 400, padding: '4px 0', borderBottom: page===l.id ? '1px solid var(--gold)' : '1px solid transparent' }}>
+            {l.label}
+          </button>
+        ))}
+        {user ? (
+          <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setMenuOpen(!menuOpen)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--dark2)', border: '1px solid var(--dark4)', borderRadius: 50, padding: '6px 14px 6px 6px', cursor: 'pointer' }}>
+              <Avatar name={user.name || user.email} size={28} />
+              <span style={{ color: 'var(--text)', fontSize: 13, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(user.name || user.email).split(' ')[0]}</span>
+            </button>
+            {menuOpen && (
+              <div style={{ position: 'absolute', right: 0, top: '110%', background: 'var(--surface)', border: '1px solid var(--dark4)', borderRadius: 'var(--radius-lg)', minWidth: 180, padding: 8, zIndex: 200 }}>
+                {user.role === 'client' && <button onClick={() => { setPage('my-appointments'); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Meus Agendamentos</button>}
+                {user.role === 'barber' && <button onClick={() => { setPage('barber-dashboard'); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Meu Painel</button>}
+                {user.role === 'admin' && <button onClick={() => { setPage('admin'); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', color: 'var(--gold)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Painel Admin</button>}
+                <div style={S.divider} />
+                <button onClick={() => { logout(); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', color: 'var(--danger)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Sair</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <button onClick={() => setPage('auth')} style={S.goldBtn}>Entrar</button>
+        )}
+      </nav>
+    </header>
+  );
+}
+
+// =============================================
+// ROOT APP
+// =============================================
+function App() {
+  const [page, setPage] = React.useState('home');
+  const [user, setUser] = React.useState(null);
+  const [toast, setToast] = React.useState(null);
+  const [barbers, setBarbers] = React.useState(MOCK_BARBERS);
+  const [services, setServices] = React.useState(MOCK_SERVICES);
+  const [appointments, setAppointments] = React.useState([]);
+  const [loadingApp, setLoadingApp] = React.useState(true);
+
+  const showToast = (msg, type = 'success') => setToast({ msg, type });
+
+  const reloadData = React.useCallback(async () => {
+    const [bs, svs, apts] = await Promise.all([DB.getBarbers(), DB.getServices(), DB.getAppointments()]);
+    if (bs?.length) setBarbers(bs);
+    if (svs?.length) setServices(svs);
+    setAppointments(apts || []);
+  }, []);
+
+  // Inicialização: restaura sessão + carrega dados
+  React.useEffect(() => {
+    async function init() {
+      try {
+        const sessionUser = await DB.getSession();
+        if (sessionUser) setUser(sessionUser);
+      } catch(e) { console.warn('Session error:', e); }
+      await reloadData();
+      setLoadingApp(false);
+    }
+    init();
+  }, []);
+
+  // Listener de auth state do Supabase
+  React.useEffect(() => {
+    const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') { setUser(null); setPage('home'); }
+      if (event === 'SIGNED_IN' && session) {
+        const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+        if (profile) setUser({ id: session.user.id, email: session.user.email, ...profile });
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => { await DB.signOut(); setUser(null); setPage('home'); };
+
+  const handleAddAppointment = async (apt) => {
+    const { data, error } = await DB.addAppointment(apt);
+    if (!error && data) setAppointments(prev => [data, ...prev]);
+    return { data, error };
+  };
+  const handleUpdateAptStatus = async (id, status) => {
+    await DB.updateAppointmentStatus(id, status);
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+  };
+  const handleAddBarber = async (b) => {
+    const { data, error } = await DB.addBarber(b);
+    if (!error && data) setBarbers(prev => [...prev, data]);
+    return { error };
+  };
+  const handleUpdateBarber = async (id, ch) => {
+    const { error } = await DB.updateBarber(id, ch);
+    if (!error) setBarbers(prev => prev.map(b => b.id === id ? { ...b, ...ch } : b));
+    return { error };
+  };
+  const handleDeleteBarber = async (id) => {
+    await DB.deleteBarber(id);
+    setBarbers(prev => prev.filter(b => b.id !== id));
+  };
+  const handleAddService = async (s) => {
+    const { data, error } = await DB.addService(s);
+    if (!error && data) setServices(prev => [...prev, data]);
+    return { error };
+  };
+  const handleUpdateService = async (id, ch) => {
+    const { error } = await DB.updateService(id, ch);
+    if (!error) setServices(prev => prev.map(s => s.id === id ? { ...s, ...ch } : s));
+    return { error };
+  };
+  const handleDeleteService = async (id) => {
+    await DB.deleteService(id);
+    setServices(prev => prev.filter(s => s.id !== id));
+  };
+
+  if (loadingApp) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 20 }}>
+      <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, color: 'var(--gold)', letterSpacing: 3 }}>{CONFIG.shopName}</span>
+      <div style={{ width: 36, height: 36, border: '2px solid #2A2520', borderTop: '2px solid var(--gold)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
+    </div>
+  );
+
+  const ctx = {
+    page, setPage, user, setUser, logout: handleLogout,
+    barbers, services, appointments,
+    reloadData,
+    addAppointment: handleAddAppointment,
+    updateAptStatus: handleUpdateAptStatus,
+    addBarber: handleAddBarber, updateBarber: handleUpdateBarber, deleteBarber: handleDeleteBarber,
+    addService: handleAddService, updateService: handleUpdateService, deleteService: handleDeleteService,
+    showToast,
+  };
+
+  const pages = { home: LandingPage, booking: BookingPage, auth: AuthPage, 'my-appointments': MyAppointmentsPage, 'barber-dashboard': BarberDashboard, admin: AdminDashboard };
+  const PageComponent = pages[page] || LandingPage;
+
+  return (
+    <AppCtx.Provider value={ctx}>
+      <div style={S.page}>
+        <Header />
+        <main><PageComponent /></main>
+      </div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </AppCtx.Provider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
