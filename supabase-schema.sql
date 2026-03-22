@@ -24,14 +24,14 @@ create table public.profiles (
 );
 alter table public.profiles enable row level security;
 
-create policy "Perfis visíveis para autenticados"
-  on public.profiles for select to authenticated using (true);
+create policy "Perfis visíveis para todos"
+  on public.profiles for select using (true);
 
-create policy "Usuário edita seu perfil"
-  on public.profiles for update to authenticated using (auth.uid() = id);
+create policy "Qualquer um edita perfil"
+  on public.profiles for update using (true);
 
-create policy "Inserir perfil"
-  on public.profiles for insert to authenticated with check (auth.uid() = id);
+create policy "Qualquer um insere perfil"
+  on public.profiles for insert with check (true);
 
 -- =============================================
 -- BARBERS
@@ -51,7 +51,7 @@ create policy "Barbeiros públicos"
   on public.barbers for select using (active = true);
 
 create policy "Autenticados gerenciam barbeiros"
-  on public.barbers for all to authenticated using (true) with check (true);
+  on public.barbers for all using (true) with check (true);
 
 -- =============================================
 -- SERVICES
@@ -71,7 +71,7 @@ create policy "Serviços públicos"
   on public.services for select using (active = true);
 
 create policy "Autenticados gerenciam serviços"
-  on public.services for all to authenticated using (true) with check (true);
+  on public.services for all using (true) with check (true);
 
 -- =============================================
 -- APPOINTMENTS
@@ -103,8 +103,8 @@ create policy "Autenticados veem agendamentos"
 create policy "Anônimos veem agendamentos"
   on public.appointments for select to anon using (true);
 
-create policy "Autenticados atualizam status"
-  on public.appointments for update to authenticated using (true) with check (true);
+create policy "Atualizar status de agendamentos"
+  on public.appointments for update using (true) with check (true);
 
 -- =============================================
 -- TRIGGER: cria profile ao registrar
