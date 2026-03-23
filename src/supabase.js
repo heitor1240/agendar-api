@@ -32,9 +32,9 @@ export const DB = {
     try {
       console.log('🔑 Tentando login...');
 
-      // Tenta autenticar com timeout de 12s para não deixar o usuário esperando eternamente
+      // Tenta autenticar com timeout de 8s
       const loginPromise = sb.auth.signInWithPassword({ email, password });
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 12000));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 8000));
 
       let result;
       try {
@@ -72,7 +72,7 @@ export const DB = {
 
         const [profileRes, barberRes] = await Promise.race([
           queriesPromise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_DATA')), 10000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_DATA')), 6000))
         ]).catch(() => [{ data: null }, { data: null }]); // Fallback se os dados secundários demorarem
 
         let profile = profileRes.data;
@@ -104,36 +104,35 @@ export const DB = {
     if (local) return JSON.parse(local);
 
     try {
-      const { data: { session } } = await sb.auth.getSession();
+      // Timeout de 5s para não travar a inicialização
+      const sessionPromise = sb.auth.getSession();
+      const { data: { session } } = await Promise.race([
+        sessionPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SESSION_TIMEOUT')), 5000))
+      ]);
       if (!session) return null;
 
-      const [profileRes, barberRes] = await Promise.all([
-        sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
-        sb.from('barbers').select('id').eq('email', session.user.email).maybeSingle()
-      ]);
+      const [profileRes, barberRes] = await Promise.race([
+        Promise.all([
+          sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+          sb.from('barbers').select('id').eq('email', session.user.email).maybeSingle()
+        ]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 5000))
+      ]).catch(() => [{ data: null }, { data: null }]);
 
       let profile = profileRes.data;
       const barberRec = barberRes.data;
 
       if (barberRec && (!profile || profile.role !== 'barber')) {
         const upd = { id: session.user.id, role: 'barber', barber_id: barberRec.id, email: session.user.email };
-        await sb.from('profiles').upsert(upd);
+        sb.from('profiles').upsert(upd).then(() => { });
         profile = { ...profile, ...upd };
       }
 
       return { id: session.user.id, email: session.user.email, role: 'client', ...profile };
     } catch (e) {
+      console.warn('⚠️ Sessão timeout ou offline:', e.message);
       return null;
-    }
-  },
-
-  async warmup() {
-    try {
-      // Faz uma query mínima apenas para acordar o banco se estiver em cold start
-      await sb.from('barbers').select('id').limit(1);
-      console.log('🔥 Banco acordado');
-    } catch (e) {
-      console.warn('⚠️ Falha ao acordar banco (offline?)');
     }
   },
 

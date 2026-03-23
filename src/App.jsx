@@ -1,6 +1,4 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { CONFIG } from './config';
-import { today } from './utils';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { DB, sb } from './supabase';
 import { S } from './styles';
 import { Toast } from './components/Common';
@@ -21,7 +19,6 @@ function App() {
   const [page, setPage] = useState('home');
   const [user, setUser] = useState(null);
   const [toast, setToast] = useState(null);
-  const [loadingApp, setLoadingApp] = useState(true);
 
   const showToast = (msg, type = 'success') => setToast({ msg, type });
 
@@ -34,21 +31,12 @@ function App() {
     setScheduleStatus
   } = useDatabase(user, showToast);
 
-  // Inicialização: restaura sessão
+  // Inicialização: restaura sessão em background (não bloqueia a UI)
   useEffect(() => {
     let isMounted = true;
     async function init() {
       console.log('🚀 Iniciando App...');
-
-      const loadingTimeout = setTimeout(() => {
-        if (isMounted) {
-          setLoadingApp(false);
-          console.log('⏱️ Interface liberada');
-        }
-      }, 3000);
-
       try {
-        DB.warmup();
         const sessionUser = await DB.getSession().catch(e => {
           console.warn('⚠️ Sessão offline:', e.message);
           return null;
@@ -80,14 +68,6 @@ function App() {
 
   const handleLogout = async () => { await DB.signOut(); setUser(null); setPage('home'); };
 
-  if (loadingApp) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 20 }}>
-      <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, color: 'var(--gold)', letterSpacing: 3 }}>{CONFIG.shopName}</span>
-      <div style={{ width: 36, height: 36, border: '2px solid #2A2520', borderTop: '2px solid var(--gold)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
-    </div>
-  );
-
   const ctx = {
     page, setPage, user, setUser, logout: handleLogout,
     barbers, services, appointments, schedules,
@@ -109,7 +89,7 @@ function App() {
         {dbWakingUp && (
           <div style={{ background: 'var(--surface)', color: 'var(--gold)', padding: '12px 20px', textAlign: 'center', fontSize: 13, borderBottom: '1px solid var(--border)' }}>
             <div style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid transparent', borderTop: '2px solid var(--gold)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', marginRight: 10, verticalAlign: 'middle' }} />
-            <span>Conectando ao banco de dados... (isso pode levar 30s no primeiro acesso)</span>
+            <span>Conectando ao banco de dados...</span>
           </div>
         )}
         <main><PageComponent /></main>

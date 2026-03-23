@@ -1,44 +1,71 @@
-import { useState, useEffect, useCallback } from 'react';
-import { DB, sb } from '../supabase';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { DB } from '../supabase';
 import { today } from '../utils';
 
+const CACHE_KEYS = {
+  barbers: 'barberpro_cache_barbers',
+  services: 'barberpro_cache_services',
+};
+
+function loadCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    // Cache válido por 10 minutos
+    if (Date.now() - ts < 10 * 60 * 1000) return data;
+    localStorage.removeItem(key);
+  } catch { /* ignora cache corrompido */ }
+  return null;
+}
+
+function saveCache(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+  } catch { /* localStorage cheio, ignora */ }
+}
+
 export function useDatabase(user, showToast) {
-  const [barbers, setBarbers] = useState([]);
-  const [services, setServices] = useState([]);
+  // Inicializa com cache local para exibir instantaneamente
+  const [barbers, setBarbers] = useState(() => loadCache(CACHE_KEYS.barbers) || []);
+  const [services, setServices] = useState(() => loadCache(CACHE_KEYS.services) || []);
   const [appointments, setAppointments] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [dbWakingUp, setDbWakingUp] = useState(false);
+  const loadedOnce = useRef(false);
 
   const reloadData = useCallback(async () => {
     try {
       console.log('🔄 Sincronizando dados...');
-      
-      const fetchWithTimeout = (promise, name, timeout = 10000) => {
+
+      const fetchWithTimeout = (promise, name, timeout = 12000) => {
         return Promise.race([
           promise,
           new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout em ${name}`)), timeout))
         ]);
       };
 
+      // Mostra indicador de "conectando" apenas se não tiver dados cacheados e demorar 2s
       const wakingTimeout = setTimeout(() => {
-        if (barbers.length === 0) setDbWakingUp(true);
-      }, 5000);
+        if (!loadedOnce.current && barbers.length === 0) setDbWakingUp(true);
+      }, 2000);
 
       const [bs, svs, apts] = await Promise.all([
-        fetchWithTimeout(DB.getBarbers(), 'Barbeiros', 30000).catch(e => { console.warn(e.message); return null; }), 
-        fetchWithTimeout(DB.getServices(), 'Serviços', 30000).catch(e => { console.warn(e.message); return null; }), 
-        fetchWithTimeout(DB.getAppointments(), 'Agendamentos', 30000).catch(e => { console.warn(e.message); return null; })
+        fetchWithTimeout(DB.getBarbers(), 'Barbeiros').catch(e => { console.warn(e.message); return null; }),
+        fetchWithTimeout(DB.getServices(), 'Serviços').catch(e => { console.warn(e.message); return null; }),
+        fetchWithTimeout(DB.getAppointments(), 'Agendamentos').catch(e => { console.warn(e.message); return null; })
       ]);
 
       clearTimeout(wakingTimeout);
       setDbWakingUp(false);
+      loadedOnce.current = true;
 
-      if (bs) setBarbers(bs);
-      if (svs) setServices(svs);
+      if (bs) { setBarbers(bs); saveCache(CACHE_KEYS.barbers, bs); }
+      if (svs) { setServices(svs); saveCache(CACHE_KEYS.services, svs); }
       if (apts) setAppointments(apts);
 
       if (user?.role === 'barber' && user?.barber_id) {
-        const sch = await fetchWithTimeout(DB.getSchedules(user.barber_id, today()), 'Agenda', 20000).catch(e => { console.warn(e.message); return []; });
+        const sch = await fetchWithTimeout(DB.getSchedules(user.barber_id, today()), 'Agenda').catch(e => { console.warn(e.message); return []; });
         setSchedules(sch || []);
       }
 
@@ -47,7 +74,7 @@ export function useDatabase(user, showToast) {
       console.error('❌ Erro na sincronização:', err);
       setDbWakingUp(false);
     }
-  }, [user, barbers.length]);
+  }, [user]);
 
   useEffect(() => {
     reloadData();
@@ -78,7 +105,7 @@ export function useDatabase(user, showToast) {
   const handleAddBarber = async (b) => {
     const { data, error } = await DB.addBarber(b);
     if (!error && data) {
-      setBarbers(prev => [...prev, data]);
+      setBarbers(prev => { const next = [...prev, data]; saveCache(CACHE_KEYS.barbers, next); return next; });
       showToast('Barbeiro adicionado!', 'success');
     } else {
       showToast('Erro ao adicionar barbeiro.', 'error');
@@ -89,7 +116,7 @@ export function useDatabase(user, showToast) {
   const handleUpdateBarber = async (id, ch) => {
     const { data, error } = await DB.updateBarber(id, ch);
     if (!error && data) {
-      setBarbers(prev => prev.map(b => b.id === id ? { ...b, ...data } : b));
+      setBarbers(prev => { const next = prev.map(b => b.id === id ? { ...b, ...data } : b); saveCache(CACHE_KEYS.barbers, next); return next; });
       showToast('Dados atualizados!', 'success');
     } else {
       showToast('Erro ao atualizar.', 'error');
@@ -100,7 +127,7 @@ export function useDatabase(user, showToast) {
   const handleDeleteBarber = async (id) => {
     const { error } = await DB.deleteBarber(id);
     if (!error) {
-      setBarbers(prev => prev.filter(b => b.id !== id));
+      setBarbers(prev => { const next = prev.filter(b => b.id !== id); saveCache(CACHE_KEYS.barbers, next); return next; });
       showToast('Barbeiro removido.', 'info');
     } else {
       showToast('Erro ao remover.', 'error');
@@ -111,7 +138,7 @@ export function useDatabase(user, showToast) {
   const handleAddService = async (s) => {
     const { data, error } = await DB.addService(s);
     if (!error && data) {
-      setServices(prev => [...prev, data]);
+      setServices(prev => { const next = [...prev, data]; saveCache(CACHE_KEYS.services, next); return next; });
       showToast('Serviço adicionado!', 'success');
     } else {
       showToast('Erro ao adicionar serviço.', 'error');
@@ -122,7 +149,7 @@ export function useDatabase(user, showToast) {
   const handleUpdateService = async (id, ch) => {
     const { data, error } = await DB.updateService(id, ch);
     if (!error && data) {
-      setServices(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
+      setServices(prev => { const next = prev.map(s => s.id === id ? { ...s, ...data } : s); saveCache(CACHE_KEYS.services, next); return next; });
       showToast('Serviço atualizado!', 'success');
     } else {
       showToast('Erro ao atualizar.', 'error');
@@ -133,7 +160,7 @@ export function useDatabase(user, showToast) {
   const handleDeleteService = async (id) => {
     const { error } = await DB.deleteService(id);
     if (!error) {
-      setServices(prev => prev.filter(s => s.id !== id));
+      setServices(prev => { const next = prev.filter(s => s.id !== id); saveCache(CACHE_KEYS.services, next); return next; });
       showToast('Serviço removido.', 'info');
     } else {
       showToast('Erro ao remover.', 'error');
