@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { MOCK_BARBERS, MOCK_SERVICES } from '../config';
 import { fmtPrice, fmtDate, today, addDays, generateTimeSlots } from '../utils';
 import { S } from '../styles';
 import { Avatar, FormField } from './Common';
@@ -17,10 +16,10 @@ export default function BookingPage() {
     if (sel.barber && sel.date) {
       const taken = appointments
         .filter(a => String(a.barber_id) === String(sel.barber.id) && a.date === sel.date && a.status !== 'cancelled')
-        .map(a => typeof a.time === 'string' ? a.time.substring(0,5) : a.time);
+        .map(a => typeof a.time === 'string' ? a.time.substring(0, 5) : a.time);
       const blocked = schedules
         .filter(s => String(s.barber_id) === String(sel.barber.id) && s.date === sel.date && s.status === 'blocked')
-        .map(s => typeof s.time === 'string' ? s.time.substring(0,5) : s.time);
+        .map(s => typeof s.time === 'string' ? s.time.substring(0, 5) : s.time);
       setBookedSlots([...taken, ...blocked]);
     }
   }, [sel.barber, sel.date, appointments, schedules]);
@@ -71,16 +70,16 @@ export default function BookingPage() {
         <p style={{ ...S.sectionSub, marginBottom: 24 }}>Siga os passos para seu atendimento</p>
         <div style={{ display: 'flex', marginBottom: 32, gap: 4 }}>
           {steps.map((s, i) => {
-            const num = i+1; const active = step===num; const delay = step>num;
+            const num = i + 1; const active = step === num; const delay = step > num;
             return (
               <React.Fragment key={i}>
                 <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ width: 30, height: 30, borderRadius: '50%', margin: '0 auto 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, background: (delay||active) ? 'var(--gold)' : 'var(--dark3)', color: (delay||active) ? '#000' : 'var(--text-dim)' }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', margin: '0 auto 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, background: (delay || active) ? 'var(--gold)' : 'var(--dark3)', color: (delay || active) ? '#000' : 'var(--text-dim)' }}>
                     {delay ? '✓' : num}
                   </div>
                   <div className="mobile-hide" style={{ fontSize: 10, color: active ? 'var(--gold)' : 'var(--text-dim)', fontWeight: active ? 600 : 400, textTransform: 'uppercase', letterSpacing: 0.5 }}>{s}</div>
                 </div>
-                {i < steps.length-1 && <div style={{ flex: 0.5, height: 1, background: step>i+1 ? 'var(--gold)' : 'var(--dark4)', alignSelf: 'center', marginBottom: active || delay ? 0 : 0 }} />}
+                {i < steps.length - 1 && <div style={{ flex: 0.5, height: 1, background: step > i + 1 ? 'var(--gold)' : 'var(--dark4)', alignSelf: 'center', marginBottom: active || delay ? 0 : 0 }} />}
               </React.Fragment>
             );
           })}
@@ -89,16 +88,16 @@ export default function BookingPage() {
 
       {step === 1 && (
         <div style={{ display: 'grid', gap: 12 }}>
-          {(barbers.length > 0 ? barbers : MOCK_BARBERS).map(b => (
-            <div key={b.id} onClick={() => setSel(p=>({...p, barber:b}))}
-              style={{ ...S.card, padding: 16, display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer', borderColor: sel.barber?.id===b.id ? 'var(--gold)' : '#2A2520' }}>
+          {barbers.map(b => (
+            <div key={b.id} onClick={() => setSel(p => ({ ...p, barber: b }))}
+              style={{ ...S.card, padding: 16, display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer', borderColor: sel.barber?.id === b.id ? 'var(--gold)' : '#2A2520' }}>
               <Avatar name={b.name} size={50} />
               <div style={{ flex: 1 }}>
                 <h3 style={{ fontSize: 16, color: 'var(--text)', marginBottom: 2 }}>{b.name}</h3>
                 <p style={{ fontSize: 11, color: 'var(--gold)', letterSpacing: 1, textTransform: 'uppercase' }}>{b.role}</p>
               </div>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${sel.barber?.id===b.id ? 'var(--gold)' : 'var(--dark4)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {sel.barber?.id===b.id && <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--gold)' }} />}
+              <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${sel.barber?.id === b.id ? 'var(--gold)' : 'var(--dark4)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {sel.barber?.id === b.id && <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--gold)' }} />}
               </div>
             </div>
           ))}
@@ -107,17 +106,17 @@ export default function BookingPage() {
 
       {step === 2 && (
         <div style={{ display: 'grid', gap: 12 }}>
-          {(services.length > 0 ? services : MOCK_SERVICES).map(s => (
-            <div key={s.id} onClick={() => setSel(p=>({...p, service:s}))}
-              style={{ ...S.card, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderColor: sel.service?.id===s.id ? 'var(--gold)' : '#2A2520' }}>
+          {services.map(s => (
+            <div key={s.id} onClick={() => setSel(p => ({ ...p, service: s }))}
+              style={{ ...S.card, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderColor: sel.service?.id === s.id ? 'var(--gold)' : '#2A2520' }}>
               <div style={{ flex: 1 }}>
                 <h3 style={{ fontSize: 16, color: 'var(--text)', marginBottom: 2 }}>{s.name}</h3>
                 <p style={{ fontSize: 12, color: 'var(--text-dim)' }}>⏱ {s.duration} min</p>
               </div>
               <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ fontSize: 18, color: 'var(--gold)', fontWeight: 600 }}>{fmtPrice(s.price)}</div>
-                <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${sel.service?.id===s.id ? 'var(--gold)' : 'var(--dark4)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {sel.service?.id===s.id && <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--gold)' }} />}
+                <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${sel.service?.id === s.id ? 'var(--gold)' : 'var(--dark4)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {sel.service?.id === s.id && <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--gold)' }} />}
                 </div>
               </div>
             </div>
@@ -129,7 +128,7 @@ export default function BookingPage() {
         <div>
           <FormField label="Data">
             <input type="date" style={S.input} min={today()} max={addDays(today(), 30)} value={sel.date}
-              onChange={e => setSel(p=>({...p, date:e.target.value, time:null}))} />
+              onChange={e => setSel(p => ({ ...p, date: e.target.value, time: null }))} />
           </FormField>
           <div style={{ marginTop: 24 }}>
             <label style={S.label}>Horários</label>
@@ -138,7 +137,7 @@ export default function BookingPage() {
                 const available = !bookedSlots.includes(slot);
                 const selected = sel.time === slot;
                 return (
-                  <button key={slot} disabled={!available} onClick={() => setSel(p=>({...p,time:slot}))}
+                  <button key={slot} disabled={!available} onClick={() => setSel(p => ({ ...p, time: slot }))}
                     style={{ padding: '12px 4px', borderRadius: 'var(--radius)', border: `1px solid ${selected ? 'var(--gold)' : available ? 'var(--dark4)' : 'var(--dark3)'}`, background: selected ? 'var(--gold)' : available ? 'var(--dark2)' : 'var(--dark)', color: selected ? '#000' : available ? 'var(--text)' : 'var(--text-dim)', fontSize: 13, fontWeight: selected ? 600 : 400, cursor: available ? 'pointer' : 'not-allowed' }}>
                     {slot}
                   </button>
@@ -160,18 +159,18 @@ export default function BookingPage() {
               { label: 'Data', value: fmtDate(sel.date) },
               { label: 'Horário', value: sel.time },
             ].map((r, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i<4 ? '1px solid #2A2520' : 'none' }}>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < 4 ? '1px solid #2A2520' : 'none' }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{r.label}</span>
-                <span style={{ color: r.label==='Valor' ? 'var(--gold)' : 'var(--text)', fontWeight: r.label==='Valor' ? 600 : 400, fontSize: 13 }}>{r.value}</span>
+                <span style={{ color: r.label === 'Valor' ? 'var(--gold)' : 'var(--text)', fontWeight: r.label === 'Valor' ? 600 : 400, fontSize: 13 }}>{r.value}</span>
               </div>
             ))}
           </div>
           {!user && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Seus dados para contato</p>
-              <FormField label="Nome *"><input style={S.input} value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} /></FormField>
-              <FormField label="E-mail *"><input style={S.input} type="email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))} /></FormField>
-              <FormField label="WhatsApp"><input style={S.input} value={form.phone} onChange={e=>setForm(p=>({...p,phone:e.target.value}))} /></FormField>
+              <FormField label="Nome *"><input style={S.input} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></FormField>
+              <FormField label="E-mail *"><input style={S.input} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></FormField>
+              <FormField label="WhatsApp"><input style={S.input} value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></FormField>
             </div>
           )}
           <button onClick={handleConfirm} disabled={loading}
@@ -196,9 +195,9 @@ export default function BookingPage() {
 
       {step < 4 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32 }}>
-          <button onClick={() => setStep(s=>s-1)} disabled={step===1} style={{ ...S.ghostBtn, opacity: step===1 ? 0.4 : 1 }}>← Anterior</button>
-          <button onClick={() => setStep(s=>s+1)} disabled={!canNext()} style={{ ...S.goldBtn, opacity: canNext() ? 1 : 0.4 }}>
-            {step===3 ? 'Revisar →' : 'Próximo →'}
+          <button onClick={() => setStep(s => s - 1)} disabled={step === 1} style={{ ...S.ghostBtn, opacity: step === 1 ? 0.4 : 1 }}>← Anterior</button>
+          <button onClick={() => setStep(s => s + 1)} disabled={!canNext()} style={{ ...S.goldBtn, opacity: canNext() ? 1 : 0.4 }}>
+            {step === 3 ? 'Revisar →' : 'Próximo →'}
           </button>
         </div>
       )}

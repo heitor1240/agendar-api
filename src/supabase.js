@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { CONFIG, ADMIN_USER, MOCK_BARBERS } from './config';
+import { CONFIG, ADMIN_USER } from './config';
 
 // Inicialização direta e única
 export const sb = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
@@ -14,7 +14,7 @@ export const DB = {
   async signUp(email, password, name, phone = '') {
     const { data, error } = await sb.auth.signUp({
       email, password,
-      options: { 
+      options: {
         data: { name, phone },
         emailRedirectTo: window.location.origin
       }
@@ -29,64 +29,64 @@ export const DB = {
   },
 
   async signIn(email, password) {
-     try {
-       console.log('🔑 Tentando login...');
-       
-       // Tenta autenticar com timeout de 12s para não deixar o usuário esperando eternamente
-       const loginPromise = sb.auth.signInWithPassword({ email, password });
-       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 12000));
+    try {
+      console.log('🔑 Tentando login...');
 
-       let result;
-       try {
-         result = await Promise.race([loginPromise, timeoutPromise]);
-       } catch (e) {
-         console.error('❌ Login demorou demais ou falhou:', e.message);
-         // Fallback para Admin local imediato se o timeout ocorrer ou falhar
-         if (email === CONFIG.adminEmail && password === CONFIG.adminPassword) {
-           localStorage.setItem('barberpro_local_user', JSON.stringify(ADMIN_USER));
-           return { user: ADMIN_USER, error: null };
-         }
-         return { user: null, error: { message: 'Servidor demorou a responder. Tente novamente.' } };
-       }
+      // Tenta autenticar com timeout de 12s para não deixar o usuário esperando eternamente
+      const loginPromise = sb.auth.signInWithPassword({ email, password });
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 12000));
 
-       const { data, error } = result;
-       
-       if (error) {
-         console.error('❌ Erro no Supabase Auth:', error.message);
-         // Fallback para Admin local se o banco falhar
-         if (email === CONFIG.adminEmail && password === CONFIG.adminPassword) {
-           localStorage.setItem('barberpro_local_user', JSON.stringify(ADMIN_USER));
-           return { user: ADMIN_USER, error: null };
-         }
-         return { user: null, error };
-       }
+      let result;
+      try {
+        result = await Promise.race([loginPromise, timeoutPromise]);
+      } catch (e) {
+        console.error('❌ Login demorou demais ou falhou:', e.message);
+        // Fallback para Admin local imediato se o timeout ocorrer ou falhar
+        if (email === CONFIG.adminEmail && password === CONFIG.adminPassword) {
+          localStorage.setItem('barberpro_local_user', JSON.stringify(ADMIN_USER));
+          return { user: ADMIN_USER, error: null };
+        }
+        return { user: null, error: { message: 'Servidor demorou a responder. Tente novamente.' } };
+      }
 
-       if (data.user) {
-         localStorage.removeItem('barberpro_local_user');
-         
-         // Busca perfil e barber_id com timeout também
-         const queriesPromise = Promise.all([
-           sb.from('profiles').select('*').eq('id', data.user.id).maybeSingle(),
-           sb.from('barbers').select('id').eq('email', data.user.email).maybeSingle()
-         ]);
-         
-         const [profileRes, barberRes] = await Promise.race([
-           queriesPromise,
-           new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_DATA')), 10000))
-         ]).catch(() => [{ data: null }, { data: null }]); // Fallback se os dados secundários demorarem
+      const { data, error } = result;
 
-         let profile = profileRes.data;
-         const barberRec = barberRes.data;
+      if (error) {
+        console.error('❌ Erro no Supabase Auth:', error.message);
+        // Fallback para Admin local se o banco falhar
+        if (email === CONFIG.adminEmail && password === CONFIG.adminPassword) {
+          localStorage.setItem('barberpro_local_user', JSON.stringify(ADMIN_USER));
+          return { user: ADMIN_USER, error: null };
+        }
+        return { user: null, error };
+      }
 
-         if (barberRec && (!profile || profile.role !== 'barber')) {
-           const upd = { id: data.user.id, role: 'barber', barber_id: barberRec.id, email: data.user.email };
-           // Upsert sem esperar (fire and forget) para não atrasar o login
-           sb.from('profiles').upsert(upd).then(() => {});
-           profile = { ...profile, ...upd };
-         }
+      if (data.user) {
+        localStorage.removeItem('barberpro_local_user');
 
-         return { user: { id: data.user.id, email: data.user.email, ...(profile || { role: 'client' }) }, error: null };
-       }
+        // Busca perfil e barber_id com timeout também
+        const queriesPromise = Promise.all([
+          sb.from('profiles').select('*').eq('id', data.user.id).maybeSingle(),
+          sb.from('barbers').select('id').eq('email', data.user.email).maybeSingle()
+        ]);
+
+        const [profileRes, barberRes] = await Promise.race([
+          queriesPromise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_DATA')), 10000))
+        ]).catch(() => [{ data: null }, { data: null }]); // Fallback se os dados secundários demorarem
+
+        let profile = profileRes.data;
+        const barberRec = barberRes.data;
+
+        if (barberRec && (!profile || profile.role !== 'barber')) {
+          const upd = { id: data.user.id, role: 'barber', barber_id: barberRec.id, email: data.user.email };
+          // Upsert sem esperar (fire and forget) para não atrasar o login
+          sb.from('profiles').upsert(upd).then(() => { });
+          profile = { ...profile, ...upd };
+        }
+
+        return { user: { id: data.user.id, email: data.user.email, ...(profile || { role: 'client' }) }, error: null };
+      }
     } catch (e) {
       console.error('❌ Erro de conexão:', e);
       return { user: null, error: { message: 'Erro de conexão com o banco de dados' } };
@@ -106,7 +106,7 @@ export const DB = {
     try {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return null;
-      
+
       const [profileRes, barberRes] = await Promise.all([
         sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
         sb.from('barbers').select('id').eq('email', session.user.email).maybeSingle()
@@ -182,19 +182,19 @@ export const DB = {
 
   async addBarber(b) {
     console.log('📝 Inserindo barbeiro:', b);
-    const { data, error } = await sb.from('barbers').insert([{ 
-      name: b.name, 
-      role: b.role || 'Barber', 
-      bio: b.bio || '', 
+    const { data, error } = await sb.from('barbers').insert([{
+      name: b.name,
+      role: b.role || 'Barber',
+      bio: b.bio || '',
       email: b.email || '',
-      active: true 
+      active: true
     }]).select();
-    
+
     if (error) {
       console.error('❌ Erro ao adicionar barbeiro:', error);
       return { data: null, error };
     }
-    
+
     console.log('✅ Barbeiro adicionado:', data);
     return { data: data[0], error: null };
   },
@@ -215,19 +215,19 @@ export const DB = {
 
   async addService(s) {
     console.log('📝 Inserindo serviço:', s);
-    const { data, error } = await sb.from('services').insert([{ 
-      name: s.name, 
-      description: s.description || '', 
-      price: s.price, 
+    const { data, error } = await sb.from('services').insert([{
+      name: s.name,
+      description: s.description || '',
+      price: s.price,
       duration: s.duration || 30,
-      active: true 
+      active: true
     }]).select();
-    
+
     if (error) {
       console.error('❌ Erro ao adicionar serviço:', error);
       return { data: null, error };
     }
-    
+
     console.log('✅ Serviço adicionado:', data);
     return { data: data[0], error: null };
   },

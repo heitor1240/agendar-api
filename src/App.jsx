@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { CONFIG, MOCK_BARBERS, MOCK_SERVICES } from './config';
+import { CONFIG } from './config';
 import { today } from './utils';
 import { DB, sb } from './supabase';
 import { S } from './styles';
@@ -39,7 +39,7 @@ function App() {
     let isMounted = true;
     async function init() {
       console.log('🚀 Iniciando App...');
-      
+
       const loadingTimeout = setTimeout(() => {
         if (isMounted) {
           setLoadingApp(false);
@@ -58,8 +58,8 @@ function App() {
           console.log('👤 Usuário logado:', sessionUser.email);
           setUser(sessionUser);
         }
-      } catch(e) { 
-        console.error('❌ Erro crítico init:', e); 
+      } catch (e) {
+        console.error('❌ Erro crítico init:', e);
       }
     }
     init();

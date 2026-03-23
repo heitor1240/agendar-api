@@ -1,5 +1,5 @@
 import React from 'react';
-import { CONFIG, MOCK_BARBERS, MOCK_SERVICES } from '../config';
+import { CONFIG } from '../config';
 import { fmtPrice } from '../utils';
 import { S } from '../styles';
 import { GoldLine, Avatar } from './Common';
@@ -40,7 +40,7 @@ export default function LandingPage() {
           <GoldLine />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
-          {(services.length > 0 ? services : MOCK_SERVICES).map(s => (
+          {services.map(s => (
             <div key={s.id} style={{ ...S.card, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <div style={{ flex: 1 }}>
@@ -66,7 +66,7 @@ export default function LandingPage() {
             <GoldLine />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20 }}>
-            {(barbers.length > 0 ? barbers : MOCK_BARBERS).map(b => (
+            {barbers.map(b => (
               <div key={b.id} style={{ ...S.card, padding: 20, textAlign: 'center' }}>
                 <Avatar name={b.name} size={64} st={{ margin: '0 auto 16px' }} />
                 <h3 style={{ fontSize: 18, fontFamily: "'Playfair Display', serif", color: 'var(--text)', marginBottom: 4 }}>{b.name}</h3>

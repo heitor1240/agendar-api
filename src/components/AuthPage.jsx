@@ -80,8 +80,7 @@ export default function AuthPage() {
           </button>
           <div style={S.divider} />
           <p style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center' }}>
-            Admin: {CONFIG.adminEmail} / {CONFIG.adminPassword}<br/>
-            Demo Barbeiro: carlos@barberpro.com / demo123
+            Admin: {CONFIG.adminEmail} / {CONFIG.adminPassword}
           </p>
         </div>
       </div>
