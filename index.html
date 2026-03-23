@@ -105,7 +105,17 @@ const DB = {
        const { data, error } = await sb.auth.signInWithPassword({ email, password });
        if (!error) {
          localStorage.removeItem('barberpro_local_user');
-         const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+         const { data: profileRes } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+         let profile = profileRes;
+
+         // SYNC: Se não for barbeiro no perfil, mas estiver na tabela de barbeiros, promove!
+         const { data: barberRec } = await sb.from('barbers').select('id').eq('email', data.user.email).maybeSingle();
+         if (barberRec && (!profile || profile.role !== 'barber')) {
+           const upd = { id: data.user.id, role: 'barber', barber_id: barberRec.id, email: data.user.email };
+           await sb.from('profiles').upsert(upd);
+           profile = { ...profile, ...upd };
+         }
+
          return { user: { id: data.user.id, email: data.user.email, ...(profile || { role: 'client' }) }, error: null };
        }
        
@@ -147,8 +157,18 @@ const DB = {
     // 2. Fallback to Supabase session
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return null;
-    const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
-    // Retorna o usuário mesmo se o perfil ainda não existir, usando 'client' como padrão
+    
+    const { data: profileRes } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+    let profile = profileRes;
+
+    // SYNC: Garante que o perfil esteja atualizado se for um barbeiro
+    const { data: barberRec } = await sb.from('barbers').select('id').eq('email', session.user.email).maybeSingle();
+    if (barberRec && (!profile || profile.role !== 'barber')) {
+      const upd = { id: session.user.id, role: 'barber', barber_id: barberRec.id, email: session.user.email };
+      await sb.from('profiles').upsert(upd);
+      profile = { ...profile, ...upd };
+    }
+
     return { id: session.user.id, email: session.user.email, role: 'client', ...profile };
   },
 
@@ -1280,12 +1300,11 @@ function App() {
   const showToast = (msg, type = 'success') => setToast({ msg, type });
 
   const reloadData = React.useCallback(async () => {
-    if (!user) return;
     const [bs, svs, apts, sch] = await Promise.all([
       DB.getBarbers(), 
       DB.getServices(), 
       DB.getAppointments(),
-      user.role === 'barber' ? DB.getSchedules(user.barber_id, today()) : Promise.resolve([])
+      user?.role === 'barber' ? DB.getSchedules(user.barber_id, today()) : Promise.resolve([])
     ]);
     setBarbers(bs || []);
     setServices(svs || []);
@@ -1300,19 +1319,24 @@ function App() {
         const sessionUser = await DB.getSession();
         if (sessionUser) setUser(sessionUser);
       } catch(e) { console.warn('Session error:', e); }
-      await reloadData();
       setLoadingApp(false);
     }
     init();
   }, []);
+
+  // Recarrega dados quando o usuário muda
+  React.useEffect(() => {
+    reloadData();
+  }, [user, reloadData]);
 
   // Listener de auth state do Supabase
   React.useEffect(() => {
     const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') { setUser(null); setPage('home'); }
       if (event === 'SIGNED_IN' && session) {
-        const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
-        if (profile) setUser({ id: session.user.id, email: session.user.email, ...profile });
+        // Usa o getSession do DB para garantir o SYNC do perfil
+        const sessionUser = await DB.getSession();
+        if (sessionUser) setUser(sessionUser);
       }
     });
     return () => subscription.unsubscribe();
