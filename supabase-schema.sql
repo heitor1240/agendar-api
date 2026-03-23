@@ -86,19 +86,61 @@ create policy "Permissão total para todos"
   on public.appointments for all using (true) with check (true);
 
 -- =============================================
+-- SCHEDULES (Horários e Bloqueios)
+-- =============================================
+create table public.schedules (
+  id bigserial primary key,
+  barber_id bigint not null references public.barbers(id) on delete cascade,
+  date date not null,
+  time time not null,
+  status text not null default 'available' check (status in ('available', 'blocked')),
+  unique(barber_id, date, time)
+);
+alter table public.schedules enable row level security;
+
+create policy "Barbeiros gerenciam seus próprios horários"
+  on public.schedules for all
+  using ( (select role from public.profiles where id = auth.uid() and barber_id = public.schedules.barber_id) = 'barber' )
+  with check ( (select role from public.profiles where id = auth.uid() and barber_id = public.schedules.barber_id) = 'barber' );
+
+create policy "Todos podem ver os horários"
+  on public.schedules for select
+  using (true);
+
+-- =============================================
 -- TRIGGER: cria profile ao registrar
 -- =============================================
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  barber_rec record;
 begin
-  insert into public.profiles (id, name, phone, role)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
-    coalesce(new.raw_user_meta_data->>'phone', ''),
-    'client'
-  )
-  on conflict (id) do nothing;
+  -- Verifica se o e-mail do novo usuário corresponde a um barbeiro existente
+  select id into barber_rec from public.barbers where email = new.email;
+
+  -- Se encontrou um barbeiro, insere o perfil com o role e id corretos
+  if barber_rec is not null then
+    insert into public.profiles (id, name, phone, role, barber_id)
+    values (
+      new.id,
+      coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+      coalesce(new.raw_user_meta_data->>'phone', ''),
+      'barber',
+      barber_rec.id
+    )
+    on conflict (id) do nothing;
+  else
+    -- Se não, insere como cliente normal
+    insert into public.profiles (id, name, phone, role)
+    values (
+      new.id,
+      coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+      coalesce(new.raw_user_meta_data->>'phone', ''),
+      'client'
+    )
+    on conflict (id) do nothing;
+  end if;
+  
   return new;
 end;
 $$ language plpgsql security definer;

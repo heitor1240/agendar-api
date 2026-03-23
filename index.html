@@ -190,6 +190,17 @@ const DB = {
     return { error };
   },
 
+  // SCHEDULES
+  async getSchedules(barber_id, date) {
+    const { data, error } = await sb.from('schedules').select('*').eq('barber_id', barber_id).eq('date', date);
+    if (error) { console.error('getSchedules error:', error); return []; }
+    return data || [];
+  },
+  async setScheduleStatus(barber_id, date, time, status) {
+    const { data, error } = await sb.from('schedules').upsert({ barber_id, date, time, status }, { onConflict: 'barber_id,date,time' });
+    return { data, error };
+  },
+
   // APPOINTMENTS
   async getAppointments(filters = {}) {
     let q = sb.from('appointments').select('*').order('date', { ascending: false }).order('time');
@@ -502,7 +513,7 @@ function AuthPage() {
 // PAGE — BOOKING WIZARD
 // =============================================
 function BookingPage() {
-  const { user, setPage, barbers, services, appointments, addAppointment, showToast } = useApp();
+  const { user, setPage, barbers, services, appointments, addAppointment, showToast, schedules } = useApp();
   const [step, setStep] = React.useState(1);
   const [sel, setSel] = React.useState({ barber: null, service: null, date: today(), time: null });
   const [form, setForm] = React.useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', notes: '' });
@@ -514,9 +525,12 @@ function BookingPage() {
       const taken = appointments
         .filter(a => String(a.barber_id) === String(sel.barber.id) && a.date === sel.date && a.status !== 'cancelled')
         .map(a => typeof a.time === 'string' ? a.time.substring(0,5) : a.time);
-      setBookedSlots(taken);
+      const blocked = schedules
+        .filter(s => String(s.barber_id) === String(sel.barber.id) && s.date === sel.date && s.status === 'blocked')
+        .map(s => typeof s.time === 'string' ? s.time.substring(0,5) : s.time);
+      setBookedSlots([...taken, ...blocked]);
     }
-  }, [sel.barber, sel.date, appointments]);
+  }, [sel.barber, sel.date, appointments, schedules]);
 
   const slots = generateTimeSlots();
   const canNext = () => {
@@ -758,12 +772,14 @@ function MyAppointmentsPage() {
 // PAGE — BARBER DASHBOARD
 // =============================================
 function BarberDashboard() {
-  const { user, barbers, appointments, updateAptStatus, services, updateService, showToast } = useApp();
+  const { user, barbers, appointments, updateAptStatus, services, updateService, showToast, reloadData, schedules, setScheduleStatus, addAppointment } = useApp();
   const barber = barbers.find(b => String(b.id) === String(user?.barber_id));
   const [activeTab, setActiveTab] = React.useState('agenda');
   const [editService, setEditService] = React.useState(null);
   const [myServices, setMyServices] = React.useState(services);
   const [selDate, setSelDate] = React.useState(today());
+  const [showBookingModal, setShowBookingModal] = React.useState(null);
+  const [newApt, setNewApt] = React.useState({ client_name: '', client_email: '', client_phone: '', service_id: '' });
 
   React.useEffect(() => { setMyServices(services); }, [services]);
 
@@ -772,6 +788,45 @@ function BarberDashboard() {
     .sort((a, b) => a.time.localeCompare(b.time));
   const todayApts = appointments.filter(a => barber && String(a.barber_id) === String(barber.id) && a.date === today());
   const revenue = todayApts.filter(a => a.status === 'confirmed' || a.status === 'done').reduce((s, a) => s + Number(a.service_price), 0);
+
+  const slots = generateTimeSlots();
+  const mySchedule = schedules.filter(s => s.date === selDate);
+
+  const toggleBlock = async (time) => {
+    const current = mySchedule.find(s => s.time === time + ':00');
+    const newStatus = current?.status === 'blocked' ? 'available' : 'blocked';
+    await setScheduleStatus(barber.id, selDate, time + ':00', newStatus);
+    showToast(`Horário ${newStatus === 'blocked' ? 'bloqueado' : 'liberado'}`, 'info');
+  };
+
+  const handleCreateAppointment = async () => {
+    if (!newApt.client_name || !newApt.service_id) {
+      showToast('Preencha o nome do cliente e o serviço', 'error');
+      return;
+    }
+    const service = services.find(s => s.id === newApt.service_id);
+    const apt = {
+      barber_id: barber.id,
+      barber_name: barber.name,
+      service_id: service.id,
+      service_name: service.name,
+      service_price: service.price,
+      date: selDate,
+      time: showBookingModal + ':00',
+      client_name: newApt.client_name,
+      client_email: newApt.client_email,
+      client_phone: newApt.client_phone,
+      status: 'confirmed',
+    };
+    const { error } = await addAppointment(apt);
+    if (error) {
+      showToast('Erro ao agendar. Tente novamente.', 'error');
+    } else {
+      showToast('Agendamento confirmado! ✓', 'success');
+      setShowBookingModal(null);
+      setNewApt({ client_name: '', client_email: '', client_phone: '', service_id: '' });
+    }
+  };
 
   if (!barber) return (
     <div style={{ maxWidth: 760, margin: '0 auto', padding: '80px 24px', textAlign: 'center' }}>
@@ -820,32 +875,67 @@ function BarberDashboard() {
             <label style={{ color: 'var(--text-muted)', fontSize: 14 }}>Ver agenda de:</label>
             <input type="date" style={{ ...S.input, width: 'auto' }} value={selDate} onChange={e => setSelDate(e.target.value)} />
           </div>
-          {myApts.length === 0 ? (
-            <div style={{ ...S.card, textAlign: 'center', padding: 40 }}><p style={{ color: 'var(--text-muted)' }}>Nenhum agendamento para {fmtDate(selDate)}</p></div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {myApts.map(a => (
-                <div key={a.id} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                      <span style={{ fontSize: 18, color: 'var(--gold)', fontWeight: 500 }}>{typeof a.time==='string' ? a.time.substring(0,5) : a.time}</span>
-                      <StatusBadge status={a.status} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+            {slots.map(slot => {
+              const apt = myApts.find(a => a.time.startsWith(slot));
+              const schedule = mySchedule.find(s => s.time.startsWith(slot));
+              const isBlocked = schedule?.status === 'blocked';
+
+              if (apt) {
+                return (
+                  <div key={slot} style={{ ...S.card, padding: 12, background: 'var(--dark3)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 16, color: 'var(--gold)', fontWeight: 500 }}>{slot}</span>
+                      <StatusBadge status={apt.status} />
                     </div>
-                    <p style={{ color: 'var(--text)', fontSize: 15 }}>{a.client_name} · {a.service_name}</p>
-                    {a.client_phone && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>📱 {a.client_phone}</p>}
+                    <p style={{ fontSize: 13, color: 'var(--text)' }}>{apt.client_name}</p>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{apt.service_name}</p>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontSize: 18, color: 'var(--gold)', fontWeight: 600 }}>{fmtPrice(a.service_price)}</span>
-                    {a.status === 'confirmed' && <>
-                      <button onClick={() => updateStatus(a.id, 'done')} style={{ ...S.goldBtn, padding: '7px 14px', fontSize: 12 }}>Concluir</button>
-                      <button onClick={() => updateStatus(a.id, 'cancelled')} style={{ ...S.ghostBtn, padding: '7px 14px', fontSize: 12, color: 'var(--danger)', borderColor: 'var(--danger)' }}>Cancelar</button>
-                    </>}
+                );
+              }
+
+              if (isBlocked) {
+                return (
+                  <div key={slot} style={{ ...S.card, padding: 12, background: 'var(--dark2)', textAlign: 'center', cursor: 'pointer' }} onClick={() => toggleBlock(slot)}>
+                    <span style={{ fontSize: 16, color: 'var(--text-muted)', fontWeight: 500 }}>{slot}</span>
+                    <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>Bloqueado</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={slot} style={{ ...S.card, padding: 12, textAlign: 'center' }}>
+                  <span style={{ fontSize: 16, color: 'var(--text)', fontWeight: 500 }}>{slot}</span>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 4, justifyContent: 'center' }}>
+                    <button onClick={() => setShowBookingModal(slot)} style={{ ...S.goldBtn, fontSize: 10, padding: '4px 8px' }}>Agendar</button>
+                    <button onClick={() => toggleBlock(slot)} style={{ ...S.ghostBtn, fontSize: 10, padding: '4px 8px' }}>Bloquear</button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
+      )}
+
+      {showBookingModal && (
+        <Modal title={`Agendar Horário - ${showBookingModal}`} onClose={() => setShowBookingModal(null)}>
+          <FormField label="Nome do Cliente">
+            <input style={S.input} value={newApt.client_name} onChange={e => setNewApt(p => ({ ...p, client_name: e.target.value }))} />
+          </FormField>
+          <FormField label="Serviço">
+            <select style={S.input} value={newApt.service_id} onChange={e => setNewApt(p => ({ ...p, service_id: e.target.value }))}>
+              <option value="">Selecione um serviço</option>
+              {myServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </FormField>
+          <FormField label="E-mail do Cliente (Opcional)">
+            <input style={S.input} value={newApt.client_email} onChange={e => setNewApt(p => ({ ...p, client_email: e.target.value }))} />
+          </FormField>
+          <FormField label="Telefone do Cliente (Opcional)">
+            <input style={S.input} value={newApt.client_phone} onChange={e => setNewApt(p => ({ ...p, client_phone: e.target.value }))} />
+          </FormField>
+          <button onClick={handleCreateAppointment} style={{ ...S.goldBtn, width: '100%', padding: 14 }}>Confirmar Agendamento</button>
+        </Modal>
       )}
 
       {activeTab === 'services' && (
@@ -1184,16 +1274,24 @@ function App() {
   const [barbers, setBarbers] = React.useState([]);
   const [services, setServices] = React.useState([]);
   const [appointments, setAppointments] = React.useState([]);
+  const [schedules, setSchedules] = React.useState([]);
   const [loadingApp, setLoadingApp] = React.useState(true);
 
   const showToast = (msg, type = 'success') => setToast({ msg, type });
 
   const reloadData = React.useCallback(async () => {
-    const [bs, svs, apts] = await Promise.all([DB.getBarbers(), DB.getServices(), DB.getAppointments()]);
+    if (!user) return;
+    const [bs, svs, apts, sch] = await Promise.all([
+      DB.getBarbers(), 
+      DB.getServices(), 
+      DB.getAppointments(),
+      user.role === 'barber' ? DB.getSchedules(user.barber_id, today()) : Promise.resolve([])
+    ]);
     setBarbers(bs || []);
     setServices(svs || []);
     setAppointments(apts || []);
-  }, []);
+    setSchedules(sch || []);
+  }, [user]);
 
   // Inicialização: restaura sessão + carrega dados
   React.useEffect(() => {
@@ -1259,6 +1357,21 @@ function App() {
     await DB.deleteService(id);
     setServices(prev => prev.filter(s => s.id !== id));
   };
+  const handleSetScheduleStatus = async (barber_id, date, time, status) => {
+    const { data, error } = await DB.setScheduleStatus(barber_id, date, time, status);
+    if (!error && data) {
+      setSchedules(prev => {
+        const index = prev.findIndex(s => s.barber_id === barber_id && s.date === date && s.time === time);
+        if (index !== -1) {
+          const newSchedules = [...prev];
+          newSchedules[index] = data[0];
+          return newSchedules;
+        }
+        return [...prev, data[0]];
+      });
+    }
+    return { data, error };
+  };
 
   if (loadingApp) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 20 }}>
@@ -1270,12 +1383,13 @@ function App() {
 
   const ctx = {
     page, setPage, user, setUser, logout: handleLogout,
-    barbers, services, appointments,
+    barbers, services, appointments, schedules,
     reloadData,
     addAppointment: handleAddAppointment,
     updateAptStatus: handleUpdateAptStatus,
     addBarber: handleAddBarber, updateBarber: handleUpdateBarber, deleteBarber: handleDeleteBarber,
     addService: handleAddService, updateService: handleUpdateService, deleteService: handleDeleteService,
+    setScheduleStatus: handleSetScheduleStatus,
     showToast,
   };
 
