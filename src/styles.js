@@ -1,0 +1,15 @@
+export const S = {
+  page: { minHeight: '100vh', background: 'var(--black)' },
+  header: { background: 'var(--dark)', borderBottom: '1px solid #2A2520', padding: '0 16px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 },
+  logo: { fontFamily: "'Playfair Display', serif", fontSize: 20, color: 'var(--gold)', letterSpacing: 1.5, fontWeight: 700 },
+  goldBtn: { background: 'var(--gold)', color: '#000', border: 'none', borderRadius: 'var(--radius)', padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer' },
+  outlineBtn: { background: 'transparent', color: 'var(--gold)', border: '1px solid var(--gold)', borderRadius: 'var(--radius)', padding: '9px 18px', fontWeight: 500, fontSize: 14, cursor: 'pointer' },
+  ghostBtn: { background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--dark4)', borderRadius: 'var(--radius)', padding: '9px 18px', fontWeight: 400, fontSize: 13, cursor: 'pointer' },
+  card: { background: 'var(--surface)', border: '1px solid #2A2520', borderRadius: 'var(--radius-lg)', padding: 20 },
+  input: { width: '100%', background: 'var(--dark2)', border: '1px solid var(--dark4)', borderRadius: 'var(--radius)', padding: '10px 14px', color: 'var(--text)', fontSize: 16, outline: 'none' },
+  label: { display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontWeight: 500, letterSpacing: 0.5, textTransform: 'uppercase' },
+  badge: { display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600 },
+  divider: { height: 1, background: '#2A2520', margin: '16px 0' },
+  sectionTitle: { fontFamily: "'Playfair Display', serif", fontSize: 26, color: 'var(--gold)', marginBottom: 6 },
+  sectionSub: { color: 'var(--text-muted)', fontSize: 14, marginBottom: 24 },
+};

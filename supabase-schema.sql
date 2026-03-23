@@ -5,6 +5,7 @@
 -- =============================================
 
 drop table if exists public.appointments cascade;
+drop table if exists public.schedules cascade;
 drop table if exists public.barber_services cascade;
 drop table if exists public.services cascade;
 drop table if exists public.barbers cascade;
@@ -98,17 +99,11 @@ create table public.schedules (
 );
 alter table public.schedules enable row level security;
 
-create policy "Barbeiros gerenciam seus próprios horários"
-  on public.schedules for all
-  using ( (select role from public.profiles where id = auth.uid() and barber_id = public.schedules.barber_id) = 'barber' )
-  with check ( (select role from public.profiles where id = auth.uid() and barber_id = public.schedules.barber_id) = 'barber' );
-
-create policy "Todos podem ver os horários"
-  on public.schedules for select
-  using (true);
+create policy "Permissão total para todos"
+  on public.schedules for all using (true) with check (true);
 
 -- =============================================
--- TRIGGER: cria profile ao registrar
+-- FUNCTIONS & TRIGGERS
 -- =============================================
 create or replace function public.handle_new_user()
 returns trigger as $$
