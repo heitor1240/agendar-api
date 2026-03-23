@@ -104,19 +104,23 @@ const DB = {
      try {
        const { data, error } = await sb.auth.signInWithPassword({ email, password });
        if (!error) {
+         localStorage.removeItem('barberpro_local_user');
          const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
          return { user: { id: data.user.id, email: data.user.email, ...(profile || { role: 'client' }) }, error: null };
        }
        
        // 2. Fallback para Admin local se a senha bater com o CONFIG
        if (email === CONFIG.adminEmail && password === CONFIG.adminPassword) {
+         localStorage.setItem('barberpro_local_user', JSON.stringify(ADMIN_USER));
          return { user: ADMIN_USER, error: null };
        }
 
        // 3. Barbeiros locais (Demo)
        const mockBarber = MOCK_BARBERS.find(b => b.email === email);
        if (mockBarber && password === 'demo123') {
-         return { user: { ...mockBarber, role: 'barber', barber_id: mockBarber.id }, error: null };
+         const localBarber = { ...mockBarber, role: 'barber', barber_id: mockBarber.id };
+         localStorage.setItem('barberpro_local_user', JSON.stringify(localBarber));
+         return { user: localBarber, error: null };
        }
 
        if (error) {
@@ -131,10 +135,16 @@ const DB = {
   },
 
   async signOut() {
+    localStorage.removeItem('barberpro_local_user');
     await sb.auth.signOut();
   },
 
   async getSession() {
+    // 1. Check local storage first for persistence
+    const local = localStorage.getItem('barberpro_local_user');
+    if (local) return JSON.parse(local);
+
+    // 2. Fallback to Supabase session
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return null;
     const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
@@ -145,8 +155,8 @@ const DB = {
   // BARBERS
   async getBarbers() {
     const { data, error } = await sb.from('barbers').select('*').eq('active', true).order('id');
-    if (error || !data || data.length === 0) return MOCK_BARBERS;
-    return data;
+    if (error) { console.error('getBarbers error:', error); return []; }
+    return data || [];
   },
   async addBarber(b) {
     const { data, error } = await sb.from('barbers').insert({ ...b, active: true }).select().single();
@@ -164,8 +174,8 @@ const DB = {
   // SERVICES
   async getServices() {
     const { data, error } = await sb.from('services').select('*').eq('active', true).order('id');
-    if (error || !data || data.length === 0) return MOCK_SERVICES;
-    return data;
+    if (error) { console.error('getServices error:', error); return []; }
+    return data || [];
   },
   async addService(s) {
     const { data, error } = await sb.from('services').insert({ ...s, active: true }).select().single();
@@ -348,7 +358,7 @@ function LandingPage() {
           <GoldLine />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 20 }}>
-          {services.map(s => (
+          {(services.length > 0 ? services : MOCK_SERVICES).map(s => (
             <div key={s.id} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
               onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--gold-dim)'}
               onMouseLeave={e => e.currentTarget.style.borderColor = '#2A2520'}>
@@ -374,7 +384,7 @@ function LandingPage() {
             <GoldLine />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 24 }}>
-            {barbers.map(b => (
+            {(barbers.length > 0 ? barbers : MOCK_BARBERS).map(b => (
               <div key={b.id} style={{ ...S.card, textAlign: 'center' }}>
                 <Avatar name={b.name} size={72} st={{ margin: '0 auto 16px' }} />
                 <h3 style={{ fontSize: 18, fontFamily: "'Playfair Display', serif", color: 'var(--text)', marginBottom: 4 }}>{b.name}</h3>
@@ -572,7 +582,7 @@ function BookingPage() {
 
       {step === 1 && (
         <div style={{ display: 'grid', gap: 16 }}>
-          {barbers.map(b => (
+          {(barbers.length > 0 ? barbers : MOCK_BARBERS).map(b => (
             <div key={b.id} onClick={() => setSel(p=>({...p, barber:b}))}
               style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 20, cursor: 'pointer', borderColor: sel.barber?.id===b.id ? 'var(--gold)' : '#2A2520' }}>
               <Avatar name={b.name} size={60} />
@@ -591,7 +601,7 @@ function BookingPage() {
 
       {step === 2 && (
         <div style={{ display: 'grid', gap: 14 }}>
-          {services.map(s => (
+          {(services.length > 0 ? services : MOCK_SERVICES).map(s => (
             <div key={s.id} onClick={() => setSel(p=>({...p, service:s}))}
               style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderColor: sel.service?.id===s.id ? 'var(--gold)' : '#2A2520' }}>
               <div>
@@ -969,7 +979,12 @@ function AdminDashboard() {
             <button onClick={() => setShowAddBarber(true)} style={S.goldBtn}>+ Adicionar Colaborador</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {barbers.map(b => (
+            {barbers.length === 0 ? (
+              <div style={{ ...S.card, textAlign: 'center', padding: 40, borderStyle: 'dashed' }}>
+                <p style={{ color: 'var(--text-muted)', marginBottom: 12 }}>Nenhum colaborador no banco de dados.</p>
+                <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>Os dados que você vê no site principal agora são apenas exemplos (MOCK). Adicione seu primeiro colaborador aqui para começar a usar o banco de dados real.</p>
+              </div>
+            ) : barbers.map(b => (
               <div key={b.id} style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                 <Avatar name={b.name} size={52} />
                 <div style={{ flex: 1 }}>
@@ -998,7 +1013,12 @@ function AdminDashboard() {
             <button onClick={() => setShowAddService(true)} style={S.goldBtn}>+ Adicionar Serviço</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {services.map(s => (
+            {services.length === 0 ? (
+              <div style={{ ...S.card, textAlign: 'center', padding: 40, borderStyle: 'dashed' }}>
+                <p style={{ color: 'var(--text-muted)', marginBottom: 12 }}>Nenhum serviço no banco de dados.</p>
+                <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>Adicione seus serviços para que os clientes possam agendar.</p>
+              </div>
+            ) : services.map(s => (
               <div key={s.id} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                 <div>
                   <h3 style={{ fontSize: 16, color: 'var(--text)' }}>{s.name}</h3>
@@ -1161,8 +1181,8 @@ function App() {
   const [page, setPage] = React.useState('home');
   const [user, setUser] = React.useState(null);
   const [toast, setToast] = React.useState(null);
-  const [barbers, setBarbers] = React.useState(MOCK_BARBERS);
-  const [services, setServices] = React.useState(MOCK_SERVICES);
+  const [barbers, setBarbers] = React.useState([]);
+  const [services, setServices] = React.useState([]);
   const [appointments, setAppointments] = React.useState([]);
   const [loadingApp, setLoadingApp] = React.useState(true);
 
@@ -1170,8 +1190,8 @@ function App() {
 
   const reloadData = React.useCallback(async () => {
     const [bs, svs, apts] = await Promise.all([DB.getBarbers(), DB.getServices(), DB.getAppointments()]);
-    if (bs?.length) setBarbers(bs);
-    if (svs?.length) setServices(svs);
+    setBarbers(bs || []);
+    setServices(svs || []);
     setAppointments(apts || []);
   }, []);
 

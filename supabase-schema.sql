@@ -24,14 +24,8 @@ create table public.profiles (
 );
 alter table public.profiles enable row level security;
 
-create policy "Perfis visíveis para todos"
-  on public.profiles for select using (true);
-
-create policy "Qualquer um edita perfil"
-  on public.profiles for update using (true);
-
-create policy "Qualquer um insere perfil"
-  on public.profiles for insert with check (true);
+create policy "Permissão total para todos"
+  on public.profiles for all using (true) with check (true);
 
 -- =============================================
 -- BARBERS
@@ -47,10 +41,7 @@ create table public.barbers (
 );
 alter table public.barbers enable row level security;
 
-create policy "Barbeiros públicos"
-  on public.barbers for select using (active = true);
-
-create policy "Autenticados gerenciam barbeiros"
+create policy "Permissão total para todos"
   on public.barbers for all using (true) with check (true);
 
 -- =============================================
@@ -67,10 +58,7 @@ create table public.services (
 );
 alter table public.services enable row level security;
 
-create policy "Serviços públicos"
-  on public.services for select using (active = true);
-
-create policy "Autenticados gerenciam serviços"
+create policy "Permissão total para todos"
   on public.services for all using (true) with check (true);
 
 -- =============================================
@@ -94,17 +82,8 @@ create table public.appointments (
 );
 alter table public.appointments enable row level security;
 
-create policy "Qualquer um pode agendar"
-  on public.appointments for insert with check (true);
-
-create policy "Autenticados veem agendamentos"
-  on public.appointments for select to authenticated using (true);
-
-create policy "Anônimos veem agendamentos"
-  on public.appointments for select to anon using (true);
-
-create policy "Atualizar status de agendamentos"
-  on public.appointments for update using (true) with check (true);
+create policy "Permissão total para todos"
+  on public.appointments for all using (true) with check (true);
 
 -- =============================================
 -- TRIGGER: cria profile ao registrar
