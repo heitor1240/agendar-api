@@ -1,8 +1,9 @@
+'use client';
 import React, { useState, useEffect } from 'react';
 import { fmtPrice, fmtDate, today, generateTimeSlots } from '../utils';
 import { S } from '../styles';
 import { Avatar, StatusBadge, Modal, FormField } from './Common';
-import { useApp } from '../App';
+import { useApp } from '@/app/providers';
 
 export default function BarberDashboard() {
   const { user, barbers, appointments, updateAptStatus, services, updateService, showToast, reloadData, schedules, setScheduleStatus, addAppointment } = useApp();

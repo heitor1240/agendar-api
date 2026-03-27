@@ -1,9 +1,10 @@
+'use client';
 import React, { useState } from 'react';
 import { CONFIG } from '../config';
 import { fmtPrice, fmtDate, today } from '../utils';
 import { S } from '../styles';
 import { Avatar, StatusBadge, Modal, FormField } from './Common';
-import { useApp } from '../App';
+import { useApp } from '@/app/providers';
 
 export default function AdminDashboard() {
   const { appointments, barbers, services, addBarber, updateBarber, deleteBarber, addService, updateService, deleteService, showToast, reloadData } = useApp();
@@ -17,6 +18,13 @@ export default function AdminDashboard() {
 
   const totalRevenue = appointments.filter(a => a.status !== 'cancelled').reduce((s, a) => s + Number(a.service_price), 0);
   const todayApts = appointments.filter(a => a.date === today());
+
+  // Agrupamento de faturamento diário
+  const dailyGroups = appointments.filter(a => a.status !== 'cancelled').reduce((acc, a) => {
+    acc[a.date] = (acc[a.date] || 0) + Number(a.service_price);
+    return acc;
+  }, {});
+  const dailyRevenueList = Object.entries(dailyGroups).sort((a,b) => b[0].localeCompare(a[0]));
 
   const doAddBarber = async () => {
     if (!newBarber.name) { showToast('Nome obrigatório', 'error'); return; }
@@ -67,6 +75,21 @@ export default function AdminDashboard() {
               </div>
             ))}
           </div>
+
+          <div style={{ marginBottom: 32 }}>
+            <h3 style={{ color: 'var(--text)', fontFamily: "'Playfair Display', serif", fontSize: 18, marginBottom: 16 }}>Faturamento por Dia</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {dailyRevenueList.length === 0 ? (
+                <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>Nenhum dado financeiro disponível.</p>
+              ) : dailyRevenueList.map(([date, total]) => (
+                <div key={date} style={{ ...S.card, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>{fmtDate(date)}</span>
+                  <span style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 15 }}>{fmtPrice(total)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <h3 style={{ color: 'var(--text)', fontFamily: "'Playfair Display', serif", fontSize: 18, marginBottom: 16 }}>Últimos Agendamentos</h3>
           {appointments.length === 0 ? (
             <div style={{ ...S.card, textAlign: 'center', padding: 32 }}><p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Nenhum agendamento ainda</p></div>

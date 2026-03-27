@@ -1,8 +1,9 @@
+'use client';
 import React from 'react';
 import { fmtPrice, fmtDate, today } from '../utils';
 import { S } from '../styles';
 import { StatusBadge } from './Common';
-import { useApp } from '../App';
+import { useApp } from '@/app/providers';
 
 export default function MyAppointmentsPage() {
   const { user, appointments, updateAptStatus, showToast } = useApp();

@@ -1,11 +1,16 @@
+'use client';
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { CONFIG } from '../config';
 import { S } from '../styles';
 import { Avatar } from './Common';
-import { useApp } from '../App';
+import { useApp } from '@/app/providers';
 
 export default function Header() {
-  const { page, setPage, user, logout } = useApp();
+  const { user, logout } = useApp();
+  const router = useRouter();
+  
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -16,15 +21,15 @@ export default function Header() {
 
   return (
     <header style={S.header}>
-      <button onClick={() => setPage('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+      <Link href="/" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'none' }}>
         <span style={S.logo}>{CONFIG.shopName}</span>
-      </button>
+      </Link>
       <nav style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
         <div className="mobile-hide" style={{ display: 'flex', gap: 24 }}>
-          {[{id:'home',label:'Início'},{id:'booking',label:'Agendar'}].map(l => (
-            <button key={l.id} onClick={() => setPage(l.id)} style={{ background: 'none', border: 'none', color: page===l.id ? 'var(--gold)' : 'var(--text-muted)', fontSize: 14, cursor: 'pointer', fontWeight: page===l.id ? 500 : 400, padding: '4px 0', borderBottom: page===l.id ? '1px solid var(--gold)' : '1px solid transparent' }}>
+          {[{id:'/',label:'Início'},{id:'/booking',label:'Agendar'}].map(l => (
+            <Link key={l.id} href={l.id} style={{ textDecoration: 'none', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 14, cursor: 'pointer', padding: '4px 0' }}>
               {l.label}
-            </button>
+            </Link>
           ))}
         </div>
         {user ? (
@@ -35,22 +40,19 @@ export default function Header() {
             </button>
             {menuOpen && (
               <div style={{ position: 'absolute', right: 0, top: '120%', background: 'var(--surface)', border: '1px solid var(--dark4)', borderRadius: 'var(--radius-lg)', minWidth: 200, padding: 8, zIndex: 200, boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
-                <div className="mobile-only" style={{ padding: '8px 14px', marginBottom: 8, display: 'none' }}>
-                   <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Olá, {user.name || user.email}</p>
-                </div>
-                <button onClick={() => { setPage('home'); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Início</button>
-                <button onClick={() => { setPage('booking'); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Novo Agendamento</button>
+                <Link href="/" onClick={() => setMenuOpen(false)} style={{ display: 'block', textDecoration: 'none', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Início</Link>
+                <Link href="/booking" onClick={() => setMenuOpen(false)} style={{ display: 'block', textDecoration: 'none', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Novo Agendamento</Link>
                 <div style={{ ...S.divider, margin: '8px 0' }} />
-                {user.role === 'client' && <button onClick={() => { setPage('my-appointments'); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Meus Agendamentos</button>}
-                {user.role === 'barber' && <button onClick={() => { setPage('barber-dashboard'); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Meu Painel</button>}
-                {user.role === 'admin' && <button onClick={() => { setPage('admin'); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--gold)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Painel Admin</button>}
+                {user.role === 'client' && <Link href="/dashboard" onClick={() => setMenuOpen(false)} style={{ display: 'block', textDecoration: 'none', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Meus Agendamentos</Link>}
+                {user.role === 'barber' && <Link href="/dashboard" onClick={() => setMenuOpen(false)} style={{ display: 'block', textDecoration: 'none', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Meu Painel</Link>}
+                {user.role === 'admin' && <Link href="/dashboard" onClick={() => setMenuOpen(false)} style={{ display: 'block', textDecoration: 'none', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--gold)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Painel Admin</Link>}
                 <div style={{ ...S.divider, margin: '8px 0' }} />
                 <button onClick={() => { logout(); setMenuOpen(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', color: 'var(--danger)', fontSize: 14, cursor: 'pointer', borderRadius: 'var(--radius)' }}>Sair da Conta</button>
               </div>
             )}
           </div>
         ) : (
-          <button onClick={() => setPage('auth')} style={{ ...S.goldBtn, padding: '8px 18px' }}>Entrar</button>
+          <Link href="/auth" style={{ ...S.goldBtn, textDecoration: 'none', padding: '8px 18px' }}>Entrar</Link>
         )}
       </nav>
     </header>

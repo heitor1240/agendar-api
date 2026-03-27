@@ -1,12 +1,15 @@
+'use client';
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { fmtPrice, fmtDate, today, addDays, generateTimeSlots } from '../utils';
 import { S } from '../styles';
 import { Avatar, FormField } from './Common';
 import { BarberListSkeleton, ServiceListSkeleton } from './Skeleton';
-import { useApp } from '../App';
+import { useApp } from '@/app/providers';
 
 export default function BookingPage() {
-  const { user, setPage, barbers, services, appointments, addAppointment, showToast, schedules } = useApp();
+  const { user, barbers, services, appointments, addAppointment, showToast, schedules } = useApp();
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [sel, setSel] = useState({ barber: null, service: null, date: today(), time: null });
   const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', notes: '' });
@@ -64,7 +67,7 @@ export default function BookingPage() {
 
   return (
     <div className="container" style={{ padding: '24px 16px' }}>
-      <button onClick={() => setPage('home')} style={{ ...S.ghostBtn, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px' }}>← Voltar</button>
+      <button onClick={() => router.push('/')} style={{ ...S.ghostBtn, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px' }}>← Voltar</button>
 
       {step < 5 && <>
         <h1 style={{ ...S.sectionTitle, fontSize: 'clamp(24px,6vw,28px)' }}>Agendar Horário</h1>
@@ -192,8 +195,8 @@ export default function BookingPage() {
           <p style={{ color: 'var(--text-muted)', fontSize: 15, marginBottom: 4 }}>Horário com <strong>{sel.barber?.name}</strong>.</p>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 32 }}>📅 {fmtDate(sel.date)} às {sel.time}</p>
           <div style={{ display: 'flex', gap: 12, flexDirection: 'column' }}>
-            <button onClick={() => setPage('home')} style={{ ...S.goldBtn, width: '100%' }}>Voltar ao início</button>
-            {user && <button onClick={() => setPage('my-appointments')} style={{ ...S.outlineBtn, width: '100%' }}>Ver meus agendamentos</button>}
+            <button onClick={() => router.push('/')} style={{ ...S.goldBtn, width: '100%' }}>Voltar ao início</button>
+            {user && <button onClick={() => router.push('/dashboard')} style={{ ...S.outlineBtn, width: '100%' }}>Ver meus agendamentos</button>}
           </div>
         </div>
       )}

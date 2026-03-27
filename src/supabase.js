@@ -1,12 +1,16 @@
+'use client';
 import { createClient } from '@supabase/supabase-js';
 import { CONFIG, ADMIN_USER } from './config';
 
 // Inicialização direta e única
-export const sb = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
+const supabaseUrl = CONFIG.supabaseUrl;
+const supabaseKey = CONFIG.supabaseKey;
+
+export const sb = createClient(supabaseUrl, supabaseKey, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
+    persistSession: typeof window !== 'undefined',
+    autoRefreshToken: typeof window !== 'undefined',
+    detectSessionInUrl: typeof window !== 'undefined'
   }
 });
 
@@ -16,7 +20,7 @@ export const DB = {
       email, password,
       options: {
         data: { name, phone },
-        emailRedirectTo: window.location.origin
+        emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : ''
       }
     });
     if (error) return { user: null, error };
@@ -55,14 +59,14 @@ export const DB = {
         console.error('❌ Erro no Supabase Auth:', error.message);
         // Fallback para Admin local se o banco falhar
         if (email === CONFIG.adminEmail && password === CONFIG.adminPassword) {
-          localStorage.setItem('barberpro_local_user', JSON.stringify(ADMIN_USER));
+          if (typeof window !== 'undefined') localStorage.setItem('barberpro_local_user', JSON.stringify(ADMIN_USER));
           return { user: ADMIN_USER, error: null };
         }
         return { user: null, error };
       }
 
       if (data.user) {
-        localStorage.removeItem('barberpro_local_user');
+        if (typeof window !== 'undefined') localStorage.removeItem('barberpro_local_user');
 
         // Busca perfil e barber_id com timeout também
         const queriesPromise = Promise.all([
@@ -95,11 +99,12 @@ export const DB = {
   },
 
   async signOut() {
-    localStorage.removeItem('barberpro_local_user');
+    if (typeof window !== 'undefined') localStorage.removeItem('barberpro_local_user');
     await sb.auth.signOut();
   },
 
   async getSession() {
+    if (typeof window === 'undefined') return null;
     const local = localStorage.getItem('barberpro_local_user');
     if (local) return JSON.parse(local);
 

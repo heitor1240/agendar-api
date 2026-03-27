@@ -1,12 +1,15 @@
+'use client';
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CONFIG } from '../config';
 import { S } from '../styles';
 import { FormField } from './Common';
 import { DB } from '../supabase';
-import { useApp } from '../App';
+import { useApp } from '@/app/providers';
 
 export default function AuthPage() {
-  const { setUser, setPage, showToast, reloadData } = useApp();
+  const { setUser, showToast } = useApp();
+  const router = useRouter();
   const [tab, setTab] = useState('login');
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
   const [loading, setLoading] = useState(false);
@@ -21,9 +24,11 @@ export default function AuthPage() {
     } else {
       setUser(user);
       showToast(`Bem-vindo, ${user.name || user.email}!`, 'success');
-      if (user.role === 'admin') setPage('admin');
-      else if (user.role === 'barber') setPage('barber-dashboard');
-      else setPage('my-appointments');
+      if (user.role === 'admin' || user.role === 'barber') {
+        router.push('/dashboard');
+      } else {
+        router.push('/dashboard');
+      }
     }
     setLoading(false);
   };

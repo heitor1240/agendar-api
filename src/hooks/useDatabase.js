@@ -1,3 +1,4 @@
+'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { DB } from '../supabase';
 import { today } from '../utils';
@@ -8,6 +9,7 @@ const CACHE_KEYS = {
 };
 
 function loadCache(key) {
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -20,19 +22,29 @@ function loadCache(key) {
 }
 
 function saveCache(key, data) {
+  if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
   } catch { /* localStorage cheio, ignora */ }
 }
 
 export function useDatabase(user, showToast) {
-  // Inicializa com cache local para exibir instantaneamente
-  const [barbers, setBarbers] = useState(() => loadCache(CACHE_KEYS.barbers) || []);
-  const [services, setServices] = useState(() => loadCache(CACHE_KEYS.services) || []);
+  const [barbers, setBarbers] = useState([]);
+  const [services, setServices] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [dbWakingUp, setDbWakingUp] = useState(false);
   const loadedOnce = useRef(false);
+
+  // Load cache on mount
+  useEffect(() => {
+    const b = loadCache(CACHE_KEYS.barbers);
+    const s = loadCache(CACHE_KEYS.services);
+    if (b) setBarbers(b);
+    if (s) setServices(s);
+    setLoading(false);
+  }, []);
 
   const reloadData = useCallback(async () => {
     try {
@@ -74,7 +86,7 @@ export function useDatabase(user, showToast) {
       console.error('❌ Erro na sincronização:', err);
       setDbWakingUp(false);
     }
-  }, [user]);
+  }, [user, barbers.length]);
 
   useEffect(() => {
     reloadData();
@@ -188,7 +200,7 @@ export function useDatabase(user, showToast) {
   };
 
   return {
-    barbers, services, appointments, schedules, dbWakingUp,
+    barbers, services, appointments, schedules, dbWakingUp, loading,
     reloadData,
     addAppointment: handleAddAppointment,
     updateAptStatus: handleUpdateAptStatus,
