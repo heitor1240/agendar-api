@@ -1,14 +1,17 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, Suspense } from 'react';
 import { DB, sb } from './supabase';
 import { S } from './styles';
 import { Toast } from './components/Common';
 import Header from './components/Header';
 import LandingPage from './components/LandingPage';
-import BookingPage from './components/BookingPage';
-import AuthPage from './components/AuthPage';
-import MyAppointmentsPage from './components/MyAppointmentsPage';
-import BarberDashboard from './components/BarberDashboard';
-import AdminDashboard from './components/AdminDashboard';
+import { PageSkeleton } from './components/Skeleton';
+
+// Code splitting: heavy pages loaded on demand
+const BookingPage = React.lazy(() => import('./components/BookingPage'));
+const AuthPage = React.lazy(() => import('./components/AuthPage'));
+const MyAppointmentsPage = React.lazy(() => import('./components/MyAppointmentsPage'));
+const BarberDashboard = React.lazy(() => import('./components/BarberDashboard'));
+const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 
 import { useDatabase } from './hooks/useDatabase';
 
@@ -92,7 +95,11 @@ function App() {
             <span>Conectando ao banco de dados...</span>
           </div>
         )}
-        <main><PageComponent /></main>
+        <main>
+          <Suspense fallback={<PageSkeleton />}>
+            <PageComponent />
+          </Suspense>
+        </main>
       </div>
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </AppCtx.Provider>

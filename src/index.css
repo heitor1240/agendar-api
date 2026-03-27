@@ -24,3 +24,12 @@ input, select, textarea { font-family: 'DM Sans', sans-serif; font-size: 16px !i
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--dark2); }
 ::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 4px; }
+
+/* Skeleton loading animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.skeleton-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}

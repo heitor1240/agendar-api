@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import { fmtPrice } from '../utils';
 import { S } from '../styles';
 import { GoldLine, Avatar } from './Common';
+import { ServiceCardSkeleton, BarberCardSkeleton } from './Skeleton';
 import { useApp } from '../App';
 
 export default function LandingPage() {
@@ -40,21 +41,24 @@ export default function LandingPage() {
           <GoldLine />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
-          {services.map(s => (
-            <div key={s.id} style={{ ...S.card, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ fontSize: 17, color: 'var(--text)', marginBottom: 6, fontWeight: 500 }}>{s.name}</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>{s.description}</p>
+          {services.length === 0
+            ? [1, 2, 3].map(i => <ServiceCardSkeleton key={i} />)
+            : services.map(s => (
+              <div key={s.id} style={{ ...S.card, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <h3 style={{ fontSize: 17, color: 'var(--text)', marginBottom: 6, fontWeight: 500 }}>{s.name}</h3>
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>{s.description}</p>
+                  </div>
+                  <div style={{ fontSize: 20, color: 'var(--gold)', fontWeight: 600, fontFamily: "'Playfair Display', serif", whiteSpace: 'nowrap' }}>{fmtPrice(s.price)}</div>
                 </div>
-                <div style={{ fontSize: 20, color: 'var(--gold)', fontWeight: 600, fontFamily: "'Playfair Display', serif", whiteSpace: 'nowrap' }}>{fmtPrice(s.price)}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #2A2520', paddingTop: 12 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>⏱ {s.duration} min</span>
+                  <button onClick={() => setPage('booking')} style={{ ...S.outlineBtn, padding: '6px 14px', fontSize: 12 }}>Agendar</button>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #2A2520', paddingTop: 12 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>⏱ {s.duration} min</span>
-                <button onClick={() => setPage('booking')} style={{ ...S.outlineBtn, padding: '6px 14px', fontSize: 12 }}>Agendar</button>
-              </div>
-            </div>
-          ))}
+            ))
+          }
         </div>
       </div>
 
@@ -66,15 +70,18 @@ export default function LandingPage() {
             <GoldLine />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20 }}>
-            {barbers.map(b => (
-              <div key={b.id} style={{ ...S.card, padding: 20, textAlign: 'center' }}>
-                <Avatar name={b.name} size={64} st={{ margin: '0 auto 16px' }} />
-                <h3 style={{ fontSize: 18, fontFamily: "'Playfair Display', serif", color: 'var(--text)', marginBottom: 4 }}>{b.name}</h3>
-                <p style={{ fontSize: 11, color: 'var(--gold)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>{b.role}</p>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, minHeight: 60 }}>{b.bio}</p>
-                <button onClick={() => setPage('booking')} style={{ ...S.goldBtn, marginTop: 20, width: '100%', padding: '12px' }}>Agendar com {b.name.split(' ')[0]}</button>
-              </div>
-            ))}
+            {barbers.length === 0
+              ? [1, 2, 3].map(i => <BarberCardSkeleton key={i} />)
+              : barbers.map(b => (
+                <div key={b.id} style={{ ...S.card, padding: 20, textAlign: 'center' }}>
+                  <Avatar name={b.name} size={64} st={{ margin: '0 auto 16px' }} />
+                  <h3 style={{ fontSize: 18, fontFamily: "'Playfair Display', serif", color: 'var(--text)', marginBottom: 4 }}>{b.name}</h3>
+                  <p style={{ fontSize: 11, color: 'var(--gold)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>{b.role}</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, minHeight: 60 }}>{b.bio}</p>
+                  <button onClick={() => setPage('booking')} style={{ ...S.goldBtn, marginTop: 20, width: '100%', padding: '12px' }}>Agendar com {b.name.split(' ')[0]}</button>
+                </div>
+              ))
+            }
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fmtPrice, fmtDate, today, addDays, generateTimeSlots } from '../utils';
 import { S } from '../styles';
 import { Avatar, FormField } from './Common';
+import { BarberListSkeleton, ServiceListSkeleton } from './Skeleton';
 import { useApp } from '../App';
 
 export default function BookingPage() {
@@ -87,6 +88,7 @@ export default function BookingPage() {
       </>}
 
       {step === 1 && (
+        barbers.length === 0 ? <BarberListSkeleton /> : (
         <div style={{ display: 'grid', gap: 12 }}>
           {barbers.map(b => (
             <div key={b.id} onClick={() => setSel(p => ({ ...p, barber: b }))}
@@ -102,9 +104,11 @@ export default function BookingPage() {
             </div>
           ))}
         </div>
+        )
       )}
 
       {step === 2 && (
+        services.length === 0 ? <ServiceListSkeleton /> : (
         <div style={{ display: 'grid', gap: 12 }}>
           {services.map(s => (
             <div key={s.id} onClick={() => setSel(p => ({ ...p, service: s }))}
@@ -122,6 +126,7 @@ export default function BookingPage() {
             </div>
           ))}
         </div>
+        )
       )}
 
       {step === 3 && (
