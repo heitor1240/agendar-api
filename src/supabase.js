@@ -2,11 +2,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { CONFIG } from './config';
 
-if (!CONFIG.supabaseUrl || !CONFIG.supabaseKey) {
-  throw new Error('Variáveis NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY não configuradas.');
-}
+const supabaseUrl = CONFIG.supabaseUrl || '';
+const supabaseKey = CONFIG.supabaseKey || '';
 
-export const sb = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
+export const sb = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: typeof window !== 'undefined',
     autoRefreshToken: typeof window !== 'undefined',
