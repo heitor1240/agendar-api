@@ -7,16 +7,16 @@ import BarberDashboard from '@/src/components/BarberDashboard';
 import MyAppointmentsPage from '@/src/components/MyAppointmentsPage';
 
 export default function DashboardPage() {
-  const { user, loading } = useApp();
+  const { user, sessionLoading } = useApp();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!sessionLoading && !user) {
       router.push('/auth');
     }
-  }, [user, loading, router]);
+  }, [user, sessionLoading, router]);
 
-  if (loading) return (
+  if (sessionLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh', color: 'var(--gold)' }}>
       Carregando...
     </div>
@@ -26,7 +26,6 @@ export default function DashboardPage() {
 
   if (user.role === 'admin') return <AdminDashboard />;
   if (user.role === 'barber') return <BarberDashboard />;
-  
-  // Default for clients
+
   return <MyAppointmentsPage />;
 }

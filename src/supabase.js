@@ -44,19 +44,11 @@ export const DB = {
     }
     if (!data.user) return { user: null, error: { message: 'Erro desconhecido ao autenticar.' } };
 
-    const [profileRes, barberRes] = await Promise.all([
-      sb.from('profiles').select('*').eq('id', data.user.id).maybeSingle(),
-      sb.from('barbers').select('id').eq('email', data.user.email).maybeSingle(),
-    ]).catch(() => [{ data: null }, { data: null }]);
-
-    let profile = profileRes?.data;
-    const barberRec = barberRes?.data;
-
-    if (barberRec && (!profile || profile.role !== 'barber')) {
-      const upd = { id: data.user.id, role: 'barber', barber_id: barberRec.id };
-      await sb.from('profiles').upsert(upd).catch(() => {});
-      profile = { ...profile, ...upd };
-    }
+    const { data: profile } = await sb
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .maybeSingle();
 
     return {
       user: { id: data.user.id, email: data.user.email, role: 'client', ...(profile || {}) },
@@ -74,19 +66,11 @@ export const DB = {
       const { data: { session }, error } = await sb.auth.getSession();
       if (error || !session) return null;
 
-      const [profileRes, barberRes] = await Promise.all([
-        sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
-        sb.from('barbers').select('id').eq('email', session.user.email).maybeSingle(),
-      ]).catch(() => [{ data: null }, { data: null }]);
-
-      let profile = profileRes?.data;
-      const barberRec = barberRes?.data;
-
-      if (barberRec && (!profile || profile.role !== 'barber')) {
-        const upd = { id: session.user.id, role: 'barber', barber_id: barberRec.id };
-        await sb.from('profiles').upsert(upd).catch(() => {});
-        profile = { ...profile, ...upd };
-      }
+      const { data: profile } = await sb
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle();
 
       return { id: session.user.id, email: session.user.email, role: 'client', ...(profile || {}) };
     } catch (e) {
