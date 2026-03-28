@@ -44,7 +44,12 @@ export const DB = {
     }
     if (!data.user) return { user: null, error: { message: 'Erro desconhecido ao autenticar.' } };
 
-    const { data: profile } = await sb
+    // Busca o perfil usando o access_token da sessão recém criada
+    const authedClient = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { Authorization: `Bearer ${data.session.access_token}` } },
+    });
+
+    const { data: profile } = await authedClient
       .from('profiles')
       .select('*')
       .eq('id', data.user.id)
@@ -57,7 +62,15 @@ export const DB = {
   },
 
   async signOut() {
-    await sb.auth.signOut();
+    try {
+      await Promise.race([
+        sb.auth.signOut(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+      ]);
+    } catch (_) {
+      // ignora timeout ou erro de rede — limpa a sessão local de qualquer forma
+    }
+    sb.auth.signOut({ scope: 'local' }).catch(() => {});
   },
 
   async getSession() {
