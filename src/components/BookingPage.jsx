@@ -37,7 +37,13 @@ export default function BookingPage() {
   };
 
   const handleConfirm = async () => {
-    if (!user && (!form.name || !form.email)) { showToast('Preencha seu nome e e-mail', 'error'); return; }
+    if (!user) {
+      const name = form.name.trim();
+      const email = form.email.trim();
+      if (!name || !email) { showToast('Preencha seu nome e e-mail', 'error'); return; }
+      if (name.length < 2) { showToast('Nome muito curto', 'error'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('E-mail inválido', 'error'); return; }
+    }
     setLoading(true);
     const apt = {
       barber_id: sel.barber.id,
@@ -47,11 +53,12 @@ export default function BookingPage() {
       service_price: sel.service.price,
       date: sel.date,
       time: sel.time + ':00',
-      client_name: user?.name || form.name,
-      client_email: user?.email || form.email,
-      client_phone: user?.phone || form.phone,
-      notes: form.notes,
+      client_name: user?.name || form.name.trim(),
+      client_email: user?.email || form.email.trim(),
+      client_phone: user?.phone || form.phone.trim(),
+      notes: form.notes.trim(),
       status: 'confirmed',
+      user_id: user?.id || null,
     };
     const { data, error } = await addAppointment(apt);
     if (error) {

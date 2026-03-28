@@ -27,8 +27,13 @@ export default function AdminDashboard() {
   const dailyRevenueList = Object.entries(dailyGroups).sort((a,b) => b[0].localeCompare(a[0]));
 
   const doAddBarber = async () => {
-    if (!newBarber.name) { showToast('Nome obrigatório', 'error'); return; }
-    const { error } = await addBarber(newBarber);
+    const name = newBarber.name.trim();
+    if (!name) { showToast('Nome obrigatório', 'error'); return; }
+    if (name.length < 2) { showToast('Nome muito curto', 'error'); return; }
+    if (newBarber.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newBarber.email)) {
+      showToast('E-mail inválido', 'error'); return;
+    }
+    const { error } = await addBarber({ ...newBarber, name });
     if (!error) {
       setNewBarber({ name: '', role: 'Barber', bio: '', email: '' });
       setShowAddBarber(false);
@@ -36,8 +41,13 @@ export default function AdminDashboard() {
   };
 
   const doAddService = async () => {
-    if (!newService.name || !newService.price) { showToast('Preencha nome e preço', 'error'); return; }
-    const { error } = await addService({ ...newService, price: Number(newService.price), duration: Number(newService.duration) });
+    const name = newService.name.trim();
+    if (!name) { showToast('Nome obrigatório', 'error'); return; }
+    const price = Number(newService.price);
+    const duration = Number(newService.duration);
+    if (!newService.price || isNaN(price) || price <= 0) { showToast('Preço deve ser maior que zero', 'error'); return; }
+    if (isNaN(duration) || duration <= 0) { showToast('Duração deve ser maior que zero', 'error'); return; }
+    const { error } = await addService({ ...newService, name, price, duration });
     if (!error) {
       setNewService({ name: '', price: '', duration: 30, description: '' });
       setShowAddService(false);
@@ -216,9 +226,13 @@ export default function AdminDashboard() {
           <FormField label="E-mail"><input style={S.input} type="email" value={editBarber.email||''} onChange={e=>setEditBarber(p=>({...p,email:e.target.value}))} /></FormField>
           <FormField label="Bio"><textarea style={{ ...S.input, minHeight: 80 }} value={editBarber.bio||''} onChange={e=>setEditBarber(p=>({...p,bio:e.target.value}))} /></FormField>
           <button onClick={async () => {
+            if (!editBarber.name?.trim()) { showToast('Nome obrigatório', 'error'); return; }
+            if (editBarber.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editBarber.email)) {
+              showToast('E-mail inválido', 'error'); return;
+            }
             const { id, ...ch } = editBarber;
-            const { error } = await updateBarber(id, ch);
-            if (!error) { setEditBarber(null); showToast('Salvo!','success'); } else showToast('Erro','error');
+            const { error } = await updateBarber(id, { ...ch, name: ch.name.trim() });
+            if (!error) { setEditBarber(null); showToast('Salvo!','success'); } else showToast('Erro ao salvar','error');
           }} style={{ ...S.goldBtn, width: '100%', padding: 14 }}>Salvar</button>
         </Modal>
       )}
@@ -230,9 +244,14 @@ export default function AdminDashboard() {
           <FormField label="Duração (min)"><input style={S.input} type="number" value={editService.duration} onChange={e=>setEditService(p=>({...p,duration:e.target.value}))} /></FormField>
           <FormField label="Descrição"><textarea style={{ ...S.input, minHeight: 70 }} value={editService.description||''} onChange={e=>setEditService(p=>({...p,description:e.target.value}))} /></FormField>
           <button onClick={async () => {
+            const price = Number(editService.price);
+            const duration = Number(editService.duration);
+            if (!editService.name?.trim()) { showToast('Nome obrigatório', 'error'); return; }
+            if (isNaN(price) || price <= 0) { showToast('Preço deve ser maior que zero', 'error'); return; }
+            if (isNaN(duration) || duration <= 0) { showToast('Duração deve ser maior que zero', 'error'); return; }
             const { id, ...ch } = editService;
-            const { error } = await updateService(id, { ...ch, price: Number(ch.price), duration: Number(ch.duration) });
-            if (!error) { setEditService(null); showToast('Salvo!','success'); } else showToast('Erro','error');
+            const { error } = await updateService(id, { ...ch, name: ch.name.trim(), price, duration });
+            if (!error) { setEditService(null); showToast('Salvo!','success'); } else showToast('Erro ao salvar','error');
           }} style={{ ...S.goldBtn, width: '100%', padding: 14 }}>Salvar</button>
         </Modal>
       )}

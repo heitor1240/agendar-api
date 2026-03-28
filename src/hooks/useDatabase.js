@@ -1,12 +1,14 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { DB } from '../supabase';
-import { today } from '../utils';
+import { today, addDays } from '../utils';
 
 const CACHE_KEYS = {
   barbers: 'barberpro_cache_barbers',
   services: 'barberpro_cache_services',
 };
+
+const APPOINTMENTS_WINDOW_DAYS = 60;
 
 function loadCache(key) {
   if (typeof window === 'undefined') return null;
@@ -14,10 +16,9 @@ function loadCache(key) {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const { data, ts } = JSON.parse(raw);
-    // Cache válido por 10 minutos
     if (Date.now() - ts < 10 * 60 * 1000) return data;
     localStorage.removeItem(key);
-  } catch { /* ignora cache corrompido */ }
+  } catch { }
   return null;
 }
 
@@ -25,7 +26,7 @@ function saveCache(key, data) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
-  } catch { /* localStorage cheio, ignora */ }
+  } catch { }
 }
 
 export function useDatabase(user, showToast) {
@@ -37,7 +38,6 @@ export function useDatabase(user, showToast) {
   const [dbWakingUp, setDbWakingUp] = useState(false);
   const loadedOnce = useRef(false);
 
-  // Load cache on mount
   useEffect(() => {
     const b = loadCache(CACHE_KEYS.barbers);
     const s = loadCache(CACHE_KEYS.services);
@@ -47,25 +47,20 @@ export function useDatabase(user, showToast) {
   }, []);
 
   const reloadData = useCallback(async () => {
+    const wakingTimeout = setTimeout(() => {
+      if (!loadedOnce.current && barbers.length === 0) setDbWakingUp(true);
+    }, 2000);
+
     try {
-      console.log('🔄 Sincronizando dados...');
-
-      const fetchWithTimeout = (promise, name, timeout = 12000) => {
-        return Promise.race([
-          promise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout em ${name}`)), timeout))
-        ]);
-      };
-
-      // Mostra indicador de "conectando" apenas se não tiver dados cacheados e demorar 2s
-      const wakingTimeout = setTimeout(() => {
-        if (!loadedOnce.current && barbers.length === 0) setDbWakingUp(true);
-      }, 2000);
+      const dateFrom = addDays(today(), -APPOINTMENTS_WINDOW_DAYS);
+      const aptFilters = { date_from: dateFrom };
+      if (user?.role === 'barber' && user?.barber_id) aptFilters.barber_id = user.barber_id;
+      if (user?.role === 'client' && user?.email) aptFilters.client_email = user.email;
 
       const [bs, svs, apts] = await Promise.all([
-        fetchWithTimeout(DB.getBarbers(), 'Barbeiros').catch(e => { console.warn(e.message); return null; }),
-        fetchWithTimeout(DB.getServices(), 'Serviços').catch(e => { console.warn(e.message); return null; }),
-        fetchWithTimeout(DB.getAppointments(), 'Agendamentos').catch(e => { console.warn(e.message); return null; })
+        DB.getBarbers().catch(() => null),
+        DB.getServices().catch(() => null),
+        DB.getAppointments(aptFilters).catch(() => null),
       ]);
 
       clearTimeout(wakingTimeout);
@@ -77,29 +72,27 @@ export function useDatabase(user, showToast) {
       if (apts) setAppointments(apts);
 
       if (user?.role === 'barber' && user?.barber_id) {
-        const sch = await fetchWithTimeout(DB.getSchedules(user.barber_id, today()), 'Agenda').catch(e => { console.warn(e.message); return []; });
+        const sch = await DB.getSchedules(user.barber_id, today()).catch(() => []);
         setSchedules(sch || []);
       }
-
-      console.log('✅ Dados atualizados');
     } catch (err) {
-      console.error('❌ Erro na sincronização:', err);
+      clearTimeout(wakingTimeout);
       setDbWakingUp(false);
+      showToast('Erro ao sincronizar dados. Verifique sua conexão.', 'error');
     }
-  }, [user, barbers.length]);
+  }, [user, barbers.length, showToast]);
 
   useEffect(() => {
     reloadData();
   }, [user, reloadData]);
 
-  // Funções de Escrita
   const handleAddAppointment = async (apt) => {
     const { data, error } = await DB.addAppointment(apt);
     if (!error && data) {
       setAppointments(prev => [data, ...prev]);
       showToast('Agendamento realizado!', 'success');
     } else {
-      showToast('Erro ao agendar. Tente novamente.', 'error');
+      showToast(error?.message || 'Erro ao agendar. Tente novamente.', 'error');
     }
     return { data, error };
   };
@@ -108,7 +101,8 @@ export function useDatabase(user, showToast) {
     const { error } = await DB.updateAppointmentStatus(id, status);
     if (!error) {
       setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-      showToast('Status atualizado!', 'success');
+      const msgs = { cancelled: 'Agendamento cancelado.', done: 'Marcado como concluído!', confirmed: 'Status atualizado!' };
+      showToast(msgs[status] || 'Status atualizado!', status === 'cancelled' ? 'info' : 'success');
     } else {
       showToast('Erro ao atualizar status.', 'error');
     }
@@ -120,7 +114,7 @@ export function useDatabase(user, showToast) {
       setBarbers(prev => { const next = [...prev, data]; saveCache(CACHE_KEYS.barbers, next); return next; });
       showToast('Barbeiro adicionado!', 'success');
     } else {
-      showToast('Erro ao adicionar barbeiro.', 'error');
+      showToast(error?.message || 'Erro ao adicionar barbeiro.', 'error');
     }
     return { data, error };
   };
@@ -131,7 +125,7 @@ export function useDatabase(user, showToast) {
       setBarbers(prev => { const next = prev.map(b => b.id === id ? { ...b, ...data } : b); saveCache(CACHE_KEYS.barbers, next); return next; });
       showToast('Dados atualizados!', 'success');
     } else {
-      showToast('Erro ao atualizar.', 'error');
+      showToast(error?.message || 'Erro ao atualizar.', 'error');
     }
     return { error };
   };
@@ -142,7 +136,7 @@ export function useDatabase(user, showToast) {
       setBarbers(prev => { const next = prev.filter(b => b.id !== id); saveCache(CACHE_KEYS.barbers, next); return next; });
       showToast('Barbeiro removido.', 'info');
     } else {
-      showToast('Erro ao remover.', 'error');
+      showToast(error?.message || 'Erro ao remover.', 'error');
     }
     return { error };
   };
@@ -153,7 +147,7 @@ export function useDatabase(user, showToast) {
       setServices(prev => { const next = [...prev, data]; saveCache(CACHE_KEYS.services, next); return next; });
       showToast('Serviço adicionado!', 'success');
     } else {
-      showToast('Erro ao adicionar serviço.', 'error');
+      showToast(error?.message || 'Erro ao adicionar serviço.', 'error');
     }
     return { data, error };
   };
@@ -164,7 +158,7 @@ export function useDatabase(user, showToast) {
       setServices(prev => { const next = prev.map(s => s.id === id ? { ...s, ...data } : s); saveCache(CACHE_KEYS.services, next); return next; });
       showToast('Serviço atualizado!', 'success');
     } else {
-      showToast('Erro ao atualizar.', 'error');
+      showToast(error?.message || 'Erro ao atualizar.', 'error');
     }
     return { error };
   };
@@ -175,7 +169,7 @@ export function useDatabase(user, showToast) {
       setServices(prev => { const next = prev.filter(s => s.id !== id); saveCache(CACHE_KEYS.services, next); return next; });
       showToast('Serviço removido.', 'info');
     } else {
-      showToast('Erro ao remover.', 'error');
+      showToast(error?.message || 'Erro ao remover.', 'error');
     }
     return { error };
   };
@@ -186,15 +180,15 @@ export function useDatabase(user, showToast) {
       setSchedules(prev => {
         const index = prev.findIndex(s => s.barber_id === barber_id && s.date === date && s.time === time);
         if (index !== -1) {
-          const newSchedules = [...prev];
-          newSchedules[index] = data[0];
-          return newSchedules;
+          const next = [...prev];
+          next[index] = data[0];
+          return next;
         }
         return [...prev, data[0]];
       });
       showToast(status === 'blocked' ? 'Horário bloqueado' : 'Horário liberado', 'info');
     } else {
-      showToast('Erro ao alterar horário.', 'error');
+      showToast(error?.message || 'Erro ao alterar horário.', 'error');
     }
     return { data, error };
   };
@@ -206,6 +200,6 @@ export function useDatabase(user, showToast) {
     updateAptStatus: handleUpdateAptStatus,
     addBarber: handleAddBarber, updateBarber: handleUpdateBarber, deleteBarber: handleDeleteBarber,
     addService: handleAddService, updateService: handleUpdateService, deleteService: handleDeleteService,
-    setScheduleStatus: handleSetScheduleStatus
+    setScheduleStatus: handleSetScheduleStatus,
   };
 }

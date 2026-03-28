@@ -16,6 +16,7 @@ export default function AuthPage() {
 
   const handleLogin = async () => {
     if (!form.email || !form.password) { showToast('Preencha e-mail e senha', 'error'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { showToast('E-mail inválido', 'error'); return; }
     setLoading(true);
     const { user, error } = await DB.signIn(form.email, form.password);
     if (error) {
@@ -35,6 +36,8 @@ export default function AuthPage() {
 
   const handleRegister = async () => {
     if (!form.name || !form.email || !form.password) { showToast('Preencha todos os campos', 'error'); return; }
+    if (form.name.trim().length < 2) { showToast('Nome muito curto', 'error'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { showToast('E-mail inválido', 'error'); return; }
     if (form.password.length < 6) { showToast('Senha precisa ter ao menos 6 caracteres', 'error'); return; }
     setLoading(true);
     const { user, error } = await DB.signUp(form.email, form.password, form.name, form.phone);
@@ -84,9 +87,6 @@ export default function AuthPage() {
             {loading ? 'Aguarde...' : tab==='login' ? 'Entrar' : 'Criar Conta'}
           </button>
           <div style={S.divider} />
-          <p style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center' }}>
-            Admin: {CONFIG.adminEmail} / {CONFIG.adminPassword}
-          </p>
         </div>
       </div>
     </div>
