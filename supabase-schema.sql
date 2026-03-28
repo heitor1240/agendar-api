@@ -27,9 +27,14 @@ create table public.profiles (
 alter table public.profiles enable row level security;
 
 -- Cada usuário lê e edita apenas o próprio perfil
-create policy "profiles: leitura própria"
+-- Admin lê tudo via role no JWT (sem recursão)
+create policy "profiles: select"
   on public.profiles for select
-  using (auth.uid() = id);
+  using (
+    auth.uid() = id
+    or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
 
 create policy "profiles: atualização própria"
   on public.profiles for update
@@ -40,16 +45,6 @@ create policy "profiles: atualização própria"
 create policy "profiles: inserção via trigger"
   on public.profiles for insert
   with check (auth.uid() = id);
-
--- Admin lê todos os perfis
-create policy "profiles: admin lê tudo"
-  on public.profiles for select
-  using (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
-  );
 
 -- =============================================
 -- BARBERS
@@ -70,20 +65,16 @@ create policy "barbers: leitura pública de ativos"
   on public.barbers for select
   using (active = true);
 
--- Apenas admin pode inserir, editar ou desativar
+-- Apenas admin pode inserir, editar ou desativar barbers
 create policy "barbers: escrita apenas admin"
   on public.barbers for all
   using (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   )
   with check (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );
 
 -- =============================================
@@ -105,20 +96,16 @@ create policy "services: leitura pública de ativos"
   on public.services for select
   using (active = true);
 
--- Apenas admin pode inserir, editar ou desativar
+-- Apenas admin pode inserir, editar ou desativar services
 create policy "services: escrita apenas admin"
   on public.services for all
   using (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   )
   with check (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );
 
 -- =============================================
@@ -172,38 +159,32 @@ create policy "appointments: cliente cancela os seus"
   )
   with check (status = 'cancelled');
 
--- Barbeiro vê os agendamentos do seu barber_id
+-- Barbeiro vê os agendamentos do seu barber_id (via JWT barber_id)
 create policy "appointments: barbeiro vê os dele"
   on public.appointments for select
   using (
-    barber_id = (
-      select p.barber_id from public.profiles p where p.id = auth.uid()
-    )
+    barber_id = (auth.jwt() -> 'user_metadata' ->> 'barber_id')::bigint
+    or barber_id = (auth.jwt() -> 'app_metadata' ->> 'barber_id')::bigint
   );
 
 -- Barbeiro pode atualizar status dos seus agendamentos
 create policy "appointments: barbeiro atualiza os dele"
   on public.appointments for update
   using (
-    barber_id = (
-      select p.barber_id from public.profiles p where p.id = auth.uid()
-    )
+    barber_id = (auth.jwt() -> 'user_metadata' ->> 'barber_id')::bigint
+    or barber_id = (auth.jwt() -> 'app_metadata' ->> 'barber_id')::bigint
   );
 
 -- Admin tem acesso total aos agendamentos
 create policy "appointments: admin acesso total"
   on public.appointments for all
   using (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   )
   with check (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );
 
 -- =============================================
@@ -224,34 +205,28 @@ create policy "schedules: leitura pública"
   on public.schedules for select
   using (true);
 
--- Barbeiro gerencia sua própria agenda
+-- Barbeiro gerencia sua própria agenda (via JWT barber_id)
 create policy "schedules: barbeiro gerencia a sua"
   on public.schedules for all
   using (
-    barber_id = (
-      select p.barber_id from public.profiles p where p.id = auth.uid()
-    )
+    barber_id = (auth.jwt() -> 'user_metadata' ->> 'barber_id')::bigint
+    or barber_id = (auth.jwt() -> 'app_metadata' ->> 'barber_id')::bigint
   )
   with check (
-    barber_id = (
-      select p.barber_id from public.profiles p where p.id = auth.uid()
-    )
+    barber_id = (auth.jwt() -> 'user_metadata' ->> 'barber_id')::bigint
+    or barber_id = (auth.jwt() -> 'app_metadata' ->> 'barber_id')::bigint
   );
 
 -- Admin gerencia todas as agendas
 create policy "schedules: admin gerencia tudo"
   on public.schedules for all
   using (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   )
   with check (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );
 
 -- =============================================
@@ -350,6 +325,12 @@ begin
       barber_rec.id
     )
     on conflict (id) do nothing;
+
+    -- Grava role e barber_id no JWT (app_metadata) para uso nas RLS policies
+    update auth.users
+      set raw_app_meta_data = raw_app_meta_data
+        || jsonb_build_object('role', 'barber', 'barber_id', barber_rec.id::text)
+      where id = new.id;
   else
     insert into public.profiles (id, name, phone, role)
     values (
@@ -359,8 +340,13 @@ begin
       'client'
     )
     on conflict (id) do nothing;
+
+    update auth.users
+      set raw_app_meta_data = raw_app_meta_data
+        || jsonb_build_object('role', 'client')
+      where id = new.id;
   end if;
-  
+
   return new;
 end;
 $$ language plpgsql security definer;
@@ -389,9 +375,13 @@ insert into public.services (name, description, price, duration) values
 -- COMO PROMOVER UM USUÁRIO A ADMIN
 -- Após criar a conta, execute no SQL Editor:
 --
--- update public.profiles
---   set role = 'admin'
---   where id = 'cole-o-uuid-do-usuario-aqui';
+-- select public.set_user_role('cole-o-uuid-aqui', 'admin', null);
+--
+-- OU manualmente:
+-- update public.profiles set role = 'admin' where id = 'uuid';
+-- update auth.users
+--   set raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'
+--   where id = 'uuid';
 --
 -- O UUID aparece em: Supabase → Auth → Users
 -- =============================================
@@ -400,9 +390,10 @@ insert into public.services (name, description, price, duration) values
 -- COMO VINCULAR BARBEIRO A UM USUÁRIO
 -- Após o barbeiro criar conta pelo site, execute:
 --
--- update public.profiles
---   set role = 'barber', barber_id = 1
---   where id = 'cole-o-uuid-do-usuario-aqui';
+-- update public.profiles set role = 'barber', barber_id = 1 where id = 'uuid';
+-- update auth.users
+--   set raw_app_meta_data = raw_app_meta_data || '{"role":"barber","barber_id":"1"}'
+--   where id = 'uuid';
 --
 -- O UUID aparece em: Supabase → Auth → Users
 -- O barber_id é o id na tabela barbers acima
